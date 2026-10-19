@@ -1,0 +1,232 @@
+{
+  "$defs": {
+    "ProcessingConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "min_mask_pixels": {
+          "default": 16,
+          "minimum": 1,
+          "title": "Min Mask Pixels",
+          "type": "integer"
+        },
+        "duplicate_iou": {
+          "default": 0.95,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Duplicate Iou",
+          "type": "number"
+        },
+        "crop_padding": {
+          "default": 12,
+          "maximum": 512,
+          "minimum": 0,
+          "title": "Crop Padding",
+          "type": "integer"
+        }
+      },
+      "title": "ProcessingConfig",
+      "type": "object"
+    },
+    "SAMConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "default": "sam3",
+          "enum": [
+            "sam3",
+            "replay"
+          ],
+          "title": "Backend",
+          "type": "string"
+        },
+        "checkpoint": {
+          "default": "",
+          "title": "Checkpoint",
+          "type": "string"
+        },
+        "device": {
+          "const": "cuda",
+          "default": "cuda",
+          "title": "Device",
+          "type": "string"
+        },
+        "confidence_threshold": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence Threshold",
+          "type": "number"
+        },
+        "box_fallback": {
+          "default": true,
+          "title": "Box Fallback",
+          "type": "boolean"
+        },
+        "replay_manifest": {
+          "default": "",
+          "title": "Replay Manifest",
+          "type": "string"
+        }
+      },
+      "title": "SAMConfig",
+      "type": "object"
+    },
+    "VLMConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "default": "http",
+          "enum": [
+            "http",
+            "replay"
+          ],
+          "title": "Backend",
+          "type": "string"
+        },
+        "style": {
+          "default": "chat_completions",
+          "enum": [
+            "chat_completions",
+            "responses",
+            "generic"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "endpoint": {
+          "default": "",
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "model": {
+          "default": "",
+          "title": "Model",
+          "type": "string"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Headers",
+          "type": "object"
+        },
+        "timeout_seconds": {
+          "default": 120,
+          "exclusiveMinimum": 0,
+          "maximum": 600,
+          "title": "Timeout Seconds",
+          "type": "number"
+        },
+        "retries": {
+          "default": 1,
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Retries",
+          "type": "integer"
+        },
+        "json_mode": {
+          "default": false,
+          "title": "Json Mode",
+          "type": "boolean"
+        },
+        "extra_body": {
+          "additionalProperties": true,
+          "title": "Extra Body",
+          "type": "object"
+        },
+        "request_template": {
+          "additionalProperties": true,
+          "title": "Request Template",
+          "type": "object"
+        },
+        "response_path": {
+          "default": "",
+          "title": "Response Path",
+          "type": "string"
+        },
+        "replay_dir": {
+          "default": "",
+          "title": "Replay Dir",
+          "type": "string"
+        }
+      },
+      "title": "VLMConfig",
+      "type": "object"
+    },
+    "VideoConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "sample_fps": {
+          "default": 5.0,
+          "exclusiveMinimum": 0,
+          "maximum": 120,
+          "title": "Sample Fps",
+          "type": "number"
+        },
+        "max_frames": {
+          "default": 300,
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Max Frames",
+          "type": "integer"
+        },
+        "start_seconds": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Start Seconds",
+          "type": "number"
+        },
+        "end_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Seconds"
+        },
+        "reference_frame": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Reference Frame",
+          "type": "integer"
+        },
+        "replay_manifest": {
+          "default": "",
+          "title": "Replay Manifest",
+          "type": "string"
+        },
+        "preview_fps": {
+          "default": 5,
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Preview Fps",
+          "type": "integer"
+        }
+      },
+      "title": "VideoConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "vlm": {
+      "$ref": "#/$defs/VLMConfig"
+    },
+    "sam": {
+      "$ref": "#/$defs/SAMConfig"
+    },
+    "processing": {
+      "$ref": "#/$defs/ProcessingConfig"
+    },
+    "video": {
+      "$ref": "#/$defs/VideoConfig"
+    }
+  },
+  "title": "PipelineConfig",
+  "type": "object"
+}

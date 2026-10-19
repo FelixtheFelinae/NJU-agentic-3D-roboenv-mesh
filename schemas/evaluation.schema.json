@@ -1,0 +1,137 @@
+{
+  "$defs": {
+    "EvaluationSample": {
+      "additionalProperties": false,
+      "properties": {
+        "sample_id": {
+          "minLength": 1,
+          "title": "Sample Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "video"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "truth": {
+          "title": "Truth",
+          "type": "string"
+        },
+        "prediction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prediction"
+        },
+        "failure_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Reason"
+        }
+      },
+      "required": [
+        "sample_id",
+        "kind",
+        "truth"
+      ],
+      "title": "EvaluationSample",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "0.2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "dataset_id": {
+      "minLength": 1,
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "annotation_source": {
+      "enum": [
+        "human",
+        "synthetic_fixture"
+      ],
+      "title": "Annotation Source",
+      "type": "string"
+    },
+    "split": {
+      "default": "validation",
+      "enum": [
+        "development",
+        "validation",
+        "test"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "samples": {
+      "items": {
+        "$ref": "#/$defs/EvaluationSample"
+      },
+      "minItems": 1,
+      "title": "Samples",
+      "type": "array"
+    },
+    "match_iou": {
+      "default": 0.5,
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "title": "Match Iou",
+      "type": "number"
+    },
+    "target_critical_recall": {
+      "default": 0.95,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Target Critical Recall",
+      "type": "number"
+    },
+    "target_mean_iou": {
+      "default": 0.85,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Target Mean Iou",
+      "type": "number"
+    },
+    "max_foreground_leakage": {
+      "default": 0.02,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Max Foreground Leakage",
+      "type": "number"
+    },
+    "max_id_switches": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Max Id Switches",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "annotation_source",
+    "samples"
+  ],
+  "title": "EvaluationManifest",
+  "type": "object"
+}

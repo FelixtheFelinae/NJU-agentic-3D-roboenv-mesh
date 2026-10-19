@@ -1,2 +1,2 @@
 # NJU-agentic-3D-roboenv-mesh
-A trial in NJU-@SoarLab
+A trial in NJU-@SOARLAB

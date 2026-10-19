@@ -1,0 +1,122 @@
+{
+  "$defs": {
+    "InstanceLabel": {
+      "additionalProperties": false,
+      "properties": {
+        "instance_id": {
+          "pattern": "^i[0-9]{4}$",
+          "title": "Instance Id",
+          "type": "string"
+        },
+        "category": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "task_role": {
+          "default": "unknown",
+          "enum": [
+            "manipulation_candidate",
+            "container",
+            "support",
+            "obstacle",
+            "decoration",
+            "transient",
+            "unknown"
+          ],
+          "title": "Task Role",
+          "type": "string"
+        },
+        "visual_route": {
+          "default": "unresolved",
+          "enum": [
+            "mesh_candidate",
+            "gs_background",
+            "exclude_transient",
+            "unresolved"
+          ],
+          "title": "Visual Route",
+          "type": "string"
+        },
+        "physical_role": {
+          "default": "unknown",
+          "enum": [
+            "rigid_body_candidate",
+            "articulated_part_candidate",
+            "support",
+            "obstacle",
+            "none",
+            "unknown"
+          ],
+          "title": "Physical Role",
+          "type": "string"
+        },
+        "parent_instance_id": {
+          "anyOf": [
+            {
+              "pattern": "^i[0-9]{4}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Instance Id"
+        },
+        "occluded": {
+          "default": false,
+          "title": "Occluded",
+          "type": "boolean"
+        },
+        "truncated": {
+          "default": false,
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "rationale": {
+          "default": "",
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instance_id",
+        "category"
+      ],
+      "title": "InstanceLabel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "instances": {
+      "items": {
+        "$ref": "#/$defs/InstanceLabel"
+      },
+      "maxItems": 256,
+      "title": "Instances",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "instances"
+  ],
+  "title": "Labels",
+  "type": "object"
+}

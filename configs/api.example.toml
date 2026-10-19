@@ -1,0 +1,37 @@
+# Copy to configs/local.toml (gitignored). Empty values must be filled before live inference.
+# endpoint is the COMPLETE request URL, not just the server base URL.
+[vlm]
+backend = "http"
+style = "chat_completions" # chat_completions | responses | generic
+endpoint = ""
+model = ""
+json_mode = false # enable only if your service supports JSON object mode
+timeout_seconds = 120
+retries = 1 # transient HTTP failures only; no semantic repair loop
+
+[vlm.headers]
+Authorization = "Bearer ${VLM_API_KEY}"
+# For unauthenticated local services, replace this table with [vlm.headers] and no entries.
+
+[vlm.extra_body]
+# Provider-specific options, e.g. max_tokens = 4096. No model/messages/input/tools override.
+
+[sam]
+backend = "sam3"
+checkpoint = "" # local SAM 3 image checkpoint; relative paths resolve from this TOML file
+device = "cuda"
+confidence_threshold = 0.5
+box_fallback = true
+
+[processing]
+min_mask_pixels = 16
+duplicate_iou = 0.95
+crop_padding = 12
+
+[video]
+sample_fps = 5.0
+max_frames = 300
+start_seconds = 0.0
+# end_seconds = 60.0
+reference_frame = 0 # index in the processed frame set, not source video index
+preview_fps = 5

@@ -1,0 +1,23 @@
+# A non-OpenAI HTTP service can be mapped without editing Python.
+[vlm]
+backend = "http"
+style = "generic"
+endpoint = ""
+model = ""
+response_path = "result.json" # dot-separated keys; array indexes also supported, e.g. outputs.0.text
+
+[vlm.headers]
+"X-API-Key" = "${VLM_API_KEY}"
+
+[vlm.request_template]
+# These exact string values are replaced as typed JSON values; no code/template evaluation.
+system = "{{system}}"
+prompt = "{{prompt}}"
+images = "{{images}}" # list of data:image/png;base64 URLs; {{image}} is the first one
+schema = "{{schema}}"
+model = "{{model}}"
+stage = "{{stage}}"
+
+[sam]
+backend = "sam3"
+checkpoint = ""

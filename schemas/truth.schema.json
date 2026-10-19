@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "TruthFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "frame_id": {
+          "minLength": 1,
+          "title": "Frame Id",
+          "type": "string"
+        },
+        "image": {
+          "title": "Image",
+          "type": "string"
+        },
+        "image_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Image Sha256",
+          "type": "string"
+        },
+        "objects": {
+          "items": {
+            "$ref": "#/$defs/TruthObject"
+          },
+          "title": "Objects",
+          "type": "array"
+        },
+        "ignore_mask": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ignore Mask"
+        }
+      },
+      "required": [
+        "frame_id",
+        "image",
+        "image_sha256",
+        "objects"
+      ],
+      "title": "TruthFrame",
+      "type": "object"
+    },
+    "TruthObject": {
+      "additionalProperties": false,
+      "properties": {
+        "gt_id": {
+          "minLength": 1,
+          "title": "Gt Id",
+          "type": "string"
+        },
+        "category": {
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "mask": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mask"
+        },
+        "visible": {
+          "default": true,
+          "title": "Visible",
+          "type": "boolean"
+        },
+        "critical": {
+          "default": false,
+          "title": "Critical",
+          "type": "boolean"
+        },
+        "exclude_from_background": {
+          "default": true,
+          "title": "Exclude From Background",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "gt_id",
+        "category"
+      ],
+      "title": "TruthObject",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "0.2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "frames": {
+      "items": {
+        "$ref": "#/$defs/TruthFrame"
+      },
+      "minItems": 1,
+      "title": "Frames",
+      "type": "array"
+    }
+  },
+  "required": [
+    "frames"
+  ],
+  "title": "TruthDocument",
+  "type": "object"
+}

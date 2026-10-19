@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "roboenv-perception"
+version = "0.2.0"
+description = "CUDA-first VLM + SAM 3 perception and baseline evaluation for Real2Sim"
+requires-python = ">=3.12"
+dependencies = ["numpy>=1.26", "Pillow>=10", "pydantic>=2.8,<3"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.11", "av>=14", "scipy>=1.13"]
+video = ["av>=14"]
+evaluation = ["scipy>=1.13"]
+server = ["av>=14", "scipy>=1.13"]
+
+[project.scripts]
+scene-perception = "roboenv_perception.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]

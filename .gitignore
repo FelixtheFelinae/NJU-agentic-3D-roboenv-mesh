@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+outputs/
+checkpoints/
+.env
+.env.*
+!.env.example
+configs/local*.toml
+test_media/images/*
+!test_media/images/.gitkeep
+test_media/videos/*
+!test_media/videos/.gitkeep

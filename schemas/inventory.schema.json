@@ -1,0 +1,108 @@
+{
+  "$defs": {
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "pattern": "^c[0-9]{3}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "category": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "prompt": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Prompt",
+          "type": "string"
+        },
+        "bbox_xyxy_norm": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox Xyxy Norm"
+        },
+        "expected_count": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Count"
+        },
+        "critical": {
+          "default": false,
+          "title": "Critical",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "category",
+        "prompt"
+      ],
+      "title": "Candidate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "scene_description": {
+      "title": "Scene Description",
+      "type": "string"
+    },
+    "objects": {
+      "items": {
+        "$ref": "#/$defs/Candidate"
+      },
+      "maxItems": 32,
+      "title": "Objects",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "scene_description",
+    "objects"
+  ],
+  "title": "Inventory",
+  "type": "object"
+}

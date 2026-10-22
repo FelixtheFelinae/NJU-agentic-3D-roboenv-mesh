@@ -23,6 +23,8 @@ bash scripts/bootstrap_cuda.sh /path/to/official-sam3-checkout
 
 准备脚本不下载 checkpoint，也不配置 API。没有 CUDA 时正式推理/评估会报错，不自动转 CPU 或 MPS。所有输出目录应使用新路径，已有结果不会被覆盖。
 
+当前开发主机的环境位置、固定依赖和日常使用方式见 [本机开发环境](docs/HOST_SETUP.md)。
+
 ### 测试素材与真实推理
 
 图片放到 `test_media/images/`，视频放到 `test_media/videos/`。这是主仓库内的目录，未创建嵌套 Git 仓库；素材默认忽略提交，见 [素材说明](test_media/README.md)。
@@ -101,6 +103,7 @@ outputs/desk-001/
 ### 开发检查
 
 ```bash
+unset PYTHONPATH PYTHONHOME # 避免继承主机 ROS 等其他 Python 环境的包路径
 .venv/bin/pytest -q
 .venv/bin/ruff check src tests
 .venv/bin/scene-perception schemas --output outputs/schemas

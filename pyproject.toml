@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = ["numpy>=1.26", "Pillow>=10", "pydantic>=2.8,<3"]
 
 [project.optional-dependencies]
+construction = ["opencv-python-headless>=4.10", "plyfile>=1.1"]
 dev = ["pytest>=8", "ruff>=0.11", "av>=14", "scipy>=1.13"]
 video = ["av>=14"]
 evaluation = ["scipy>=1.13"]

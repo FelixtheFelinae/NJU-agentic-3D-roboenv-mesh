@@ -61,3 +61,30 @@
 
 本次工件、日志和版本快照保存在 `outputs/host-setup-20261020/`。
 SAM 3 权重访问申请已提交，官方返回等待作者审核；VLM API 配置和真实素材尚待提供。
+
+## A–C 构建模块 Linux 验证（2026-10-22）
+
+- 完整测试：`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest -q`，
+  **52 项通过、1 项跳过**。其中新增构建测试 11 项；跳过项为已安装 SAM 时不适用的
+  “缺少 SAM”场景。禁用自动插件加载避免主机 ROS Python 3.10 插件干扰。
+- HTTP 测试需本机回环端口；受限沙箱初次运行出现 6 个 socket 权限错误，
+  获准在沙箱外运行后通过。不是实际供应商 API 验证。
+- `ruff check src tests scripts`、新增文件格式检查、Python compileall、
+  `bash -n scripts/bootstrap_cuda.sh`、`git diff --check`、CLI 帮助和 schema 导出通过。
+- 新增测试覆盖：感知工件完整性、证据整理、时间间隔选帧、前景/未知排除、
+  刚体零关节与数值/来源约束、模拟设计和交接、自检哈希不匹配后的有界拒绝、
+  子目录工件哈希、失败运行记录、桌面 atlas 的 holdout 隔离、
+  合成补全 provenance、弱监督权重、偏心相机投影、COLMAP 空观测行解析、
+  子进程返回码记录及 CLI 输出目录保护。
+- 宿主机 `nvidia-smi` 确认 RTX 4070 Ti SUPER，驱动 580.178.04，16376 MiB；
+  沙箱内 GPU 不可见，不能把沙箱报错判断成宿主机驱动故障。
+- 当前环境可发现 torch、sam3、cv2；未发现 colmap 命令，项目 Python 未安装
+  plyfile 或 diff_gaussian_rasterization。没有安装/下载这些依赖或模型。
+- `configs/local.toml` 的 VLM endpoint/model、SAM checkpoint 为空；所需 API
+  环境变量未设置。此次未重查 Hugging Face 授权状态，历史 403 不能代表当前状态。
+  用户视频未在本次交接包中，未执行真实视频推理、相机重建或 CUDA 3DGS 训练。
+
+3DGS worker 完成入口、区域加权损失和固定种子拓扑基线实现；上游 CUDA 扩展和
+具体 checkout 的真实兼容性尚未实测。上述通过项证明程序契约与合成夹具行为，
+不证明真实语义准确性、几何质量、尺度正确性或物理可用性。详见
+[CONSTRUCTION](CONSTRUCTION.md)。

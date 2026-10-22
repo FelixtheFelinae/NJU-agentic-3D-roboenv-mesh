@@ -66,8 +66,15 @@ def main(argv=None):
     schema.add_argument("--output", type=Path, required=True)
     doctor = commands.add_parser("doctor", help="Read-only check of remote runtime dependencies")
     doctor.add_argument("--require-cuda", action="store_true")
+    from .construction.cli import add_commands
+
+    add_commands(commands)
     args = parser.parse_args(argv)
     try:
+        if hasattr(args, "construction_action"):
+            from .construction.cli import execute
+
+            return execute(args)
         if args.command == "run":
             root = run_image(
                 args.image, args.output, load_config(args.config), args.scene_id, args.task
@@ -162,6 +169,8 @@ def main(argv=None):
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0 if result["valid"] else 1
         elif args.command == "schemas":
+            from .construction.contracts import Blueprint, ConstructionConfig, TableSpec
+
             args.output.mkdir(parents=True, exist_ok=False)
             for name, model in [
                 ("config", PipelineConfig),
@@ -169,6 +178,9 @@ def main(argv=None):
                 ("labels", Labels),
                 ("evaluation", EvaluationManifest),
                 ("truth", TruthDocument),
+                ("construction", ConstructionConfig),
+                ("blueprint", Blueprint),
+                ("table", TableSpec),
             ]:
                 write_json(args.output / f"{name}.schema.json", model.model_json_schema())
         elif args.command == "doctor":

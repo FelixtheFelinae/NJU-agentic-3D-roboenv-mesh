@@ -68,8 +68,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class HTTPVLM:
-    def __init__(self, config: VLMConfig):
+    def __init__(self, config: VLMConfig, system: str = SYSTEM):
         self.config = config
+        self.system = system
         parsed = urlsplit(config.endpoint)
         if parsed.scheme not in {"https", "http"} or not parsed.hostname:
             raise ValueError("vlm.endpoint must be a complete http(s) request URL")
@@ -102,7 +103,7 @@ class HTTPVLM:
             return render_template(
                 cfg.request_template,
                 {
-                    "{{system}}": SYSTEM,
+                    "{{system}}": self.system,
                     "{{prompt}}": prompt,
                     "{{images}}": urls,
                     "{{image}}": urls[0],
@@ -116,7 +117,7 @@ class HTTPVLM:
                 "model": cfg.model,
                 "stream": False,
                 "messages": [
-                    {"role": "system", "content": SYSTEM},
+                    {"role": "system", "content": self.system},
                     {
                         "role": "user",
                         "content": [{"type": "text", "text": prompt}]
@@ -130,7 +131,7 @@ class HTTPVLM:
             payload = {
                 "model": cfg.model,
                 "stream": False,
-                "instructions": SYSTEM,
+                "instructions": self.system,
                 "input": [
                     {
                         "role": "user",
@@ -155,7 +156,7 @@ class HTTPVLM:
                 "endpoint": cfg.endpoint,
                 "model": cfg.model,
                 "prompt": prompt,
-                "system": SYSTEM,
+                "system": self.system,
                 "schema": schema,
                 "images": [{"name": p.name, "sha256": sha256(p)} for p in images],
                 "extra_body": cfg.extra_body,
@@ -247,5 +248,5 @@ class ReplayVLM:
         return result
 
 
-def make_vlm(config: VLMConfig) -> VLM:
-    return ReplayVLM(config) if config.backend == "replay" else HTTPVLM(config)
+def make_vlm(config: VLMConfig, system: str = SYSTEM) -> VLM:
+    return ReplayVLM(config) if config.backend == "replay" else HTTPVLM(config, system=system)

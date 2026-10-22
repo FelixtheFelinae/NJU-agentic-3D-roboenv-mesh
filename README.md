@@ -111,3 +111,10 @@ unset PYTHONPATH PYTHONHOME # 避免继承主机 ROS 等其他 Python 环境的�
 ```
 
 `demo` / `demo-video` 只使用合成图像和回放输出，供契约/指标测试；即使指标为 1，也不会生成正式通过结论。它们不是 CUDA 部署验证。正式环境验证记录见 [VALIDATION](docs/VALIDATION.md)，单图接口见 [STEP1](docs/STEP1.md)。
+
+### 对象设计与背景构建（A–C）
+
+现有 VLM + SAM3 后新增对象多视角证据、理解/蓝图/哈希自检与 Coding 交接、
+背景监督 mask、统一桌面纹理融合/补全、COLMAP 相机和区域加权 3DGS 入口。
+命令、配置模板、工件契约与验证边界见 [构建说明](docs/CONSTRUCTION.md)。
+完整 Coding/Review 构建循环、RoboHelix 与真实素材上的重建验收留待后续。

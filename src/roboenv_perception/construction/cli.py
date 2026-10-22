@@ -8,6 +8,20 @@ from .contracts import ConstructionConfig, load_construction_config
 
 
 def add_commands(commands):
+    doctor = commands.add_parser(
+        "construction-doctor", help="Read-only configuration and dependency checks"
+    )
+    doctor.set_defaults(construction_action="construction-doctor")
+    doctor.add_argument("--config", type=Path, required=True)
+    doctor.add_argument("--perception-config", type=Path)
+    doctor.add_argument("--media", type=Path)
+    doctor.add_argument("--output", type=Path)
+    demo = commands.add_parser(
+        "demo-construction", help="Synthetic A-C plumbing demo; no model/API training"
+    )
+    demo.set_defaults(construction_action="demo-construction")
+    demo.add_argument("--output", type=Path, required=True)
+
     for name, source, help_text in [
         ("prepare-objects", "bundle", "Select object evidence from a perception run"),
         ("design-objects", "evidence", "Run intake, blueprint and bounded self-review"),
@@ -31,6 +45,23 @@ def add_commands(commands):
 
 
 def execute(args):
+    if args.construction_action == "construction-doctor":
+        from ..io import write_json
+        from .preflight import check_readiness
+
+        result = check_readiness(args.config, args.perception_config, args.media)
+        if args.output:
+            if args.output.exists():
+                raise FileExistsError(args.output)
+            write_json(args.output, result)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["ready"] else 2
+    if args.construction_action == "demo-construction":
+        from .demo import run_demo
+
+        print(json.dumps(run_demo(args.output), ensure_ascii=False, indent=2))
+        return 0
+
     from .background import prepare_background
     from .design import design_objects
     from .evidence import prepare_objects

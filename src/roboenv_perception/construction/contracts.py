@@ -58,6 +58,10 @@ def load_construction_config(path: Path) -> ConstructionConfig:
         value = getattr(obj, key)
         if value and not Path(value).is_absolute():
             setattr(obj, key, str((path.parent / value).resolve()))
+    for key in ("colmap", "gaussian_python"):
+        value = getattr(config.background, key)
+        if value and "/" in value and not Path(value).is_absolute():
+            setattr(config.background, key, str((path.parent / value).resolve()))
     return config
 
 

@@ -101,3 +101,52 @@ Linux 合成夹具测试覆盖证据完整性、未知/前景排除、刚体零�
 3DGS 接口依据官方 [renderer](https://github.com/graphdeco-inria/gaussian-splatting/blob/main/gaussian_renderer/__init__.py)
 和 [GaussianModel](https://github.com/graphdeco-inria/gaussian-splatting/blob/main/scene/gaussian_model.py)，
 查阅日期 2026-10-22；使用上游代码需遵守其许可证。
+
+## 配置检查与可运行示例（2026-10-22）
+
+```bash
+# 不调用模型，不下载权重；缺项时退出 2，并输出缺失字段及错误层级
+scene-perception construction-doctor --config configs/local-construction.toml \
+  --perception-config configs/local.toml --media /absolute/path/to/desk.mp4
+
+# 运行合成视频 → 对象证据 → replay 蓝图自检交接 → 背景 → 桌面融合/补全
+scene-perception demo-construction --output outputs/construction-demo-NEW
+```
+
+合成示例不执行真实模型、相机恢复或 3DGS 训练。检查命令不发送网络请求，
+不输出 header 内容或环境变量值；检查通过仍不保证第三方二进制实际兼容。
+`background.colmap`、`background.gaussian_python` 若包含相对目录，按配置文件所在目录解析；
+只有程序名时沿用 PATH 查找。
+
+建议初次云端联调使用 `qwen3.7-plus`；配置模板见
+[`qwen-construction.example.toml`](../configs/qwen-construction.example.toml)。
+该模板是北京地域示例，`enable_thinking=false`、JSON Object 输出，尚未发起真实 API 请求。
+使用前确认账号可访问模型与所选地域；可替换为控制台提供的业务空间专属 endpoint。
+感知和构建目前分别读自己的配置，需要把相同 `[vlm]`、`[vlm.headers]`、
+`[vlm.extra_body]` 设置放入 `configs/local.toml` 与 `configs/local-construction.toml`。
+不要把构建专用 `[evidence]` 等节放进感知配置。
+
+需要用户填写/提供：
+
+| 项目 | 位置 | 何时需要 |
+| --- | --- | --- |
+| API 完整请求 URL、模型、地域 | 两份本地配置的 `[vlm]` | 真实感知/对象设计 |
+| API 密钥 | 当前运行进程的 `VLM_API_KEY` 环境变量 | 真实 API；不要写入受控文件或聊天 |
+| 原版 SAM3 checkpoint 本地路径 | 感知配置 `sam.checkpoint` | 真实分割 |
+| 真实图片/视频在此 Linux 主机上的路径 | `--image` / `--video` / doctor 的 `--media` | 真实运行 |
+| 对象真实 XYZ 尺寸及测量备注 | `design.measurements` 指向的 JSON | 可暂缺，尺寸保持 unknown |
+| 同一桌面区域的真实宽深、各帧四角 | `--spec` JSON | 真实桌面融合；不能沿用示例数字 |
+
+程序不自动读取 `.env`。如需在远程终端临时输入密钥，可以执行
+`read -rsp 'VLM API key: ' VLM_API_KEY`，随后 `export VLM_API_KEY`；
+终端输入不会回显，命令历史也不包含密钥。其他终端设置的环境变量不会自动进入已启动的
+Codex 进程，请在配置完成后告知运行方式，以便从正确环境启动。
+
+依赖安装属于开发环境工作，不需要用户手填：当前还缺 COLMAP、classic 3DGS checkout、
+其 CUDA rasterizer/simple-knn。项目环境已补装 `plyfile==1.1.3`，未改动其他环境。
+真实素材与 checkpoint 尚未配置，因此没有进行实际 VLM/SAM 推理。
+
+官方接口依据（查阅日期 2026-10-22）：
+[视觉理解与结构化输出](https://help.aliyun.com/en/model-studio/vision-model/)、
+[地域、业务空间域名与兼容接口](https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope)。
+模型推荐尚未在用户素材上做过比较。

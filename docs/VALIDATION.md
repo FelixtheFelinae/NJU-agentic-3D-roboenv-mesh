@@ -88,3 +88,17 @@ SAM 3 权重访问申请已提交，官方返回等待作者审核；VLM API 配
 具体 checkout 的真实兼容性尚未实测。上述通过项证明程序契约与合成夹具行为，
 不证明真实语义准确性、几何质量、尺度正确性或物理可用性。详见
 [CONSTRUCTION](CONSTRUCTION.md)。
+
+## 配置检查与实际构建尝试（2026-10-22，追加）
+
+- 完整 Linux 测试：**54 项通过、1 项跳过**；新增合成构建示例与配置检查测试。
+- `demo-construction` 实际运行成功：6 帧、2 份对象 Coding 交接，1 个背景路由对象；
+  桌面 atlas 初始未观测比例约 11.24%，holdout 未参与纹理融合。
+  此流程使用显式合成输入和 replay JSON，没有模型推理。
+- 本地输出：`outputs/construction-smoke-20261022/`，含 summary、各阶段 hash 索引、
+  atlas/provenance 和 `readiness.json`。输出未纳入 Git。
+- `estimate-cameras` 已实际启动并在特征提取前失败：`FileNotFoundError: colmap`；
+  `cameras-attempt/run.json` 与 `logs/features.json` 保存了失败层级和命令。
+  没有相机恢复结果，没有 3DGS 训练结果。
+- 项目虚拟环境补装 `plyfile==1.1.3`，保留既有 NumPy 1.26.4/OpenCV 约束。
+- Qwen 配置模板通过解析；API 地域、认证、权重、真实素材均仍待用户配置，未发送请求。

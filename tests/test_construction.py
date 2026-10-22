@@ -335,3 +335,43 @@ def test_custom_design_system_does_not_replace_perception_default():
     custom = HTTPVLM(config, system="design-only").build_payload("x", "prompt", [], {})
     assert default["messages"][0]["content"] == SYSTEM
     assert custom["messages"][0]["content"] == "design-only"
+
+
+def test_construction_demo_exports_handoffs_and_table_without_models(tmp_path):
+    from roboenv_perception.construction.demo import run_demo
+
+    result = run_demo(tmp_path / "demo")
+    assert result["frames"] == 6
+    assert result["model_inference"] == "not_run"
+    assert result["gaussian_training"] == "not_run"
+    assert not result["holdout_used_for_fusion"]
+    assert sum(row["status"] == "design_ready" for row in result["objects"]) == 2
+    assert verify_run(tmp_path / "demo/table", "completion.json")["physics_geometry"] is None
+
+
+def test_readiness_reports_missing_fields_without_disclosing_credentials(tmp_path, monkeypatch):
+    from roboenv_perception.construction.contracts import load_construction_config
+    from roboenv_perception.construction.preflight import check_readiness
+
+    monkeypatch.delenv("VLM_API_KEY", raising=False)
+    monkeypatch.setenv("PRIVATE_TEST_SECRET", "not-for-reports")
+    config = tmp_path / "config.toml"
+    config.write_text(
+        '[vlm.headers]\nAuthorization = "Bearer ${VLM_API_KEY}"\n'
+        'Custom = "${PRIVATE_TEST_SECRET}"\n'
+        '[background]\ngaussian_python = "./missing-python"\n'
+        'colmap = "./missing-colmap"\n'
+    )
+    parsed = load_construction_config(config)
+    assert parsed.background.gaussian_python == str(tmp_path / "missing-python")
+    result = check_readiness(config)
+    assert not result["ready"] and not result["stage_readiness"]["live_perception"]
+    assert "not-for-reports" not in json.dumps(result)
+    missing = {row["name"] for row in result["checks"] if not row["ready"]}
+    assert {
+        "design.vlm.endpoint_and_model",
+        "design.vlm.env.VLM_API_KEY",
+        "input.media",
+        "cameras.colmap",
+        "training.python_dependencies",
+    } <= missing

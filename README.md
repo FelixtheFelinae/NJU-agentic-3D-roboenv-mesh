@@ -10,7 +10,7 @@ DATA is All you Need！
 
 固定流程：图片 → VLM 候选清单 → SAM 3 分割 → 规则整理 → VLM 实例语义 → 用途分流 → 对象包、背景包、检查报告。
 
-固定流水线已支持单张图片、离线视频和独立标注评估。正式运行统一使用 **Linux + NVIDIA CUDA**；Mac 使用你现有的 SSH 方式连接服务器，不提供单独启动器。Agent、跨独立输入身份融合、mesh/3DGS 生成和最终机器人 Benchmark 留到后续阶段。
+固定流水线已支持单张图片、离线视频和独立标注评估。正式运行统一使用 **Linux + NVIDIA CUDA**；Mac 使用你现有的 SSH 方式连接服务器，不提供单独启动器。通用场景 Agent、跨独立输入身份融合及最终机器人 Benchmark 仍待后续整合；当前视频的 mesh/3DGS 与物理资产实验见下文。
 
 ### CUDA 服务器准备
 
@@ -24,6 +24,7 @@ bash scripts/bootstrap_cuda.sh /path/to/official-sam3-checkout
 准备脚本不下载 checkpoint，也不配置 API。没有 CUDA 时正式推理/评估会报错，不自动转 CPU 或 MPS。所有输出目录应使用新路径，已有结果不会被覆盖。
 
 当前开发主机的环境位置、固定依赖和日常使用方式见 [本机开发环境](docs/HOST_SETUP.md)。
+已获批 SAM3 后，在其他电脑下载并迁移权重的完整命令见 [SAM3 权重迁移](docs/SAM3_TRANSFER.md)。
 
 ### 测试素材与真实推理
 
@@ -45,7 +46,11 @@ export VLM_API_KEY='在你的终端填写密钥'
 
 可选 `--task '把杯子放进盒子'`；不提供任务时保留潜在用途。API 支持 `chat_completions`、`responses` 和自定义 JSON HTTP 模板，详见 [API 文档](docs/API.md)及[通用模板](configs/generic.example.toml)。
 
+可选替代后端已支持 **Grounding DINO + SAM 2.1**，同时覆盖单图与离线视频。配置、权重准备及限制见 [替代后端说明](docs/GROUNDED_SAM2.md)和[配置模板](configs/grounded-sam2.example.toml)。默认仍使用 SAM 3，已有本地配置不会自动切换。
+
 真实 SAM 后端使用[官方 SAM 3](https://github.com/facebookresearch/sam3)。`sam.checkpoint` 指向本地 SAM 3 checkpoint；视频也使用官方 SAM 3 视频接口。当前没有实现 SAM 3.1 Multiplex 专用适配，不能直接假设可更换为任意 3.1 checkpoint。
+
+当前测试视频已增加三物体物理资产构建实验：独立 Coding/Review 上下文、Artisan SDK 编译、Isaac Lab 接触与被动铰链验证，见 [视频物理资产实验](docs/VIDEO_ASSETS.md)。
 
 ### 离线视频与独立评估
 

@@ -248,9 +248,11 @@ def evaluate(manifest_path: Path, lock_path: Path, output: Path, predictions=Non
                 try:
                     pred_frames = prediction_frames(bundle)
                     run = read_json(bundle / "run.json")
-                    all_live &= run.get("execution_mode") == "live" and run.get(
-                        "model_execution"
-                    ) == {"vlm": "executed", "sam3": "executed"}
+                    execution = run.get("model_execution", {})
+                    all_live &= run.get("execution_mode") == "live" and execution in (
+                        {"vlm": "executed", "sam3": "executed"},
+                        {"vlm": "executed", "grounded_sam2": "executed"},
+                    )
                     if (sample.kind == "video") != (
                         read_json(bundle / "scene.json").get("kind") == "video"
                     ):

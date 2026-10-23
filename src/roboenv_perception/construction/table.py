@@ -9,6 +9,7 @@ from ..io import read_json, relative_file, write_json
 from ..masks import save_mask
 from .common import cv2_module, new_run, read_mask, source_identity, verify_run
 from .contracts import VERSION, TableSpec
+from .texture import fill_texture_patches, robust_texture_atlas
 
 
 def complete_table(background: Path, spec_path: Path, output: Path):
@@ -28,6 +29,7 @@ def complete_table(background: Path, spec_path: Path, output: Path):
     total = np.zeros((height, width, 3), np.float32)
     count = np.zeros((height, width), np.float32)
     transforms = {}
+    warped_images, warped_masks = [], []
     with new_run(output, "table_completion", source_identity(background)):
         write_json(output / "table_spec.json", spec.model_dump(mode="json"))
         # Holdout RGB never enters the atlas or inpainting inputs.
@@ -57,25 +59,36 @@ def complete_table(background: Path, spec_path: Path, output: Path):
             trusted = weight >= 0.999
             total[trusted] += warped[trusted] / weight[trusted, None]
             count[trusted] += 1
+            if spec.fusion == "median":
+                normalized = np.clip(warped / np.maximum(weight[..., None], 1e-8), 0, 255)
+                warped_images.append(normalized.astype(np.uint8))
+                warped_masks.append(trusted)
         observed = count > 0
         if not observed.any():
             raise ValueError(
                 "no training-view table observations; check splits and corner annotations"
             )
         atlas = np.clip(total / np.maximum(count[..., None], 1), 0, 255).astype(np.uint8)
+        if spec.fusion == "median":
+            atlas, _ = robust_texture_atlas(warped_images, warped_masks)
         provenance = observed.astype(
             np.uint8
         )  # 0 unknown, 1 real training observation, 2 synthesized
         holes = ~observed
         fill_fraction = float(holes.mean())
-        if spec.fill == "telea":
+        Image.fromarray(atlas).save(output / "atlas-observed.png")
+        fill_details = None
+        if spec.fill in {"telea", "patch"}:
             if fill_fraction > spec.max_fill_fraction:
                 raise ValueError(
                     "unobserved tabletop exceeds max_fill_fraction; capture more views"
                 )
             if holes.any():
                 # Appearance-only baseline; not semantic or metric reconstruction evidence.
-                atlas = cv2.inpaint(atlas, holes.astype(np.uint8) * 255, 3, cv2.INPAINT_TELEA)
+                if spec.fill == "patch":
+                    atlas, fill_details = fill_texture_patches(atlas, observed, spec.patch_size)
+                else:
+                    atlas = cv2.inpaint(atlas, holes.astype(np.uint8) * 255, 3, cv2.INPAINT_TELEA)
                 provenance[holes] = 2
         Image.fromarray(atlas).save(output / "atlas.png")
         Image.fromarray(provenance).save(output / "provenance.png")
@@ -128,6 +141,8 @@ def complete_table(background: Path, spec_path: Path, output: Path):
                 "width_m": spec.width_m,
                 "depth_m": spec.depth_m,
                 "fill_method": spec.fill,
+                "fusion_method": spec.fusion,
+                "fill_details": fill_details,
                 "unobserved_fraction_before_fill": fill_fraction,
                 "holdout_pixels_used_for_fusion": False,
                 "geometry": "manually annotated planar patch; not camera/metric-scene calibration",

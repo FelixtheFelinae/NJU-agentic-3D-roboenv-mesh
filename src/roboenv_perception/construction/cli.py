@@ -21,6 +21,13 @@ def add_commands(commands):
     )
     demo.set_defaults(construction_action="demo-construction")
     demo.add_argument("--output", type=Path, required=True)
+    simulation = commands.add_parser(
+        "prepare-table-sim", help="Prepare a scaled tabletop job for a separate Isaac Lab worker"
+    )
+    simulation.set_defaults(construction_action="prepare-table-sim")
+    simulation.add_argument("--table", type=Path, required=True)
+    simulation.add_argument("--spec", type=Path, required=True)
+    simulation.add_argument("--output", type=Path, required=True)
 
     for name, source, help_text in [
         ("prepare-objects", "bundle", "Select object evidence from a perception run"),
@@ -45,6 +52,12 @@ def add_commands(commands):
 
 
 def execute(args):
+    if args.construction_action == "prepare-table-sim":
+        from .simulation import prepare_table_simulation
+
+        prepare_table_simulation(args.table, args.spec, args.output)
+        print(json.dumps({"output": str(args.output.resolve()), "physics_validation": "not_run"}))
+        return 0
     if args.construction_action == "construction-doctor":
         from ..io import write_json
         from .preflight import check_readiness

@@ -1,7 +1,9 @@
 # 本机开发环境
 
 本项目后续在 `/home/felixz/NJU-agentic-3D-roboenv-mesh` 开发，使用仓库内独立
-`.venv`。不复用或修改 `openvla-oft`、`env_isaaclab`、`env_phc` 等 Conda 环境。
+`.venv`，不将 `openvla-oft`、`env_isaaclab`、`env_phc` 等 Conda 环境作为感知开发环境，
+也不修改它们的包。后续桌面仿真 worker 使用独立 Python 3.11 解释器读取既有 Isaac Sim
+安装，与感知 Python 3.12 分开；运行数据也分开，详见 [ISAAC_TABLE](ISAAC_TABLE.md)。
 
 ## 固定位置与依赖
 

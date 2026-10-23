@@ -116,3 +116,30 @@ def test_missing_env_key_fails_before_request(service, tmp_path):
     with pytest.raises(ValueError, match="environment variable"):
         HTTPVLM(config).infer("inventory", "", [image], {}, tmp_path / "trace")
     assert not state["requests"]
+
+
+def test_explicit_secret_file_is_literal_and_preserves_existing_environment(tmp_path, monkeypatch):
+    from roboenv_perception.secret_env import load_secret_env
+
+    monkeypatch.delenv("VLM_API_KEY", raising=False)
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "existing-fixture-value")
+    marker = tmp_path / "must-not-exist"
+    secret = tmp_path / "secret.env"
+    value = f"$(touch {marker})"
+    secret.write_text(f'VLM_API_KEY="{value}"\nDASHSCOPE_API_KEY=new-fixture-value\n')
+    load_secret_env(secret)
+    import os
+
+    assert os.environ["VLM_API_KEY"] == value
+    assert os.environ["DASHSCOPE_API_KEY"] == "existing-fixture-value"
+    assert not marker.exists()
+
+
+def test_bad_secret_file_error_never_echoes_value(tmp_path):
+    from roboenv_perception.secret_env import load_secret_env
+
+    secret = tmp_path / "secret.env"
+    secret.write_text('VLM_API_KEY="private-fixture-value\n')
+    with pytest.raises(ValueError) as caught:
+        load_secret_env(secret)
+    assert "private-fixture-value" not in str(caught.value)

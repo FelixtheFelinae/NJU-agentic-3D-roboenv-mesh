@@ -127,4 +127,10 @@ class SAM3Segmenter:
 
 
 def make_segmenter(config: SAMConfig):
-    return ReplaySegmenter(config) if config.backend == "replay" else SAM3Segmenter(config)
+    if config.backend == "replay":
+        return ReplaySegmenter(config)
+    if config.backend == "grounded_sam2":
+        from .grounded_sam2 import GroundedSAM2Segmenter
+
+        return GroundedSAM2Segmenter(config)
+    return SAM3Segmenter(config)

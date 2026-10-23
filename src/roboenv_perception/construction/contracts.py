@@ -36,8 +36,27 @@ class BackgroundConfig(Contract):
     use_gpu_features: bool = True
     gaussian_python: str = "python"
     gaussian_repo: str = ""
-    iterations: int = Field(default=15000, ge=1)
+    iterations: int = Field(default=10000, ge=1)
+    training_mode: Literal["fixed", "adaptive"] = "adaptive"
+    ssim_weight: float = Field(default=0.2, ge=0, le=1)
+    densify_from_iter: int = Field(default=500, ge=0)
+    densify_until_iter: int = Field(default=7000, ge=1)
+    densification_interval: int = Field(default=100, ge=1)
+    densify_grad_threshold: float = Field(default=0.0002, gt=0)
+    opacity_reset_interval: int = Field(default=3000, ge=1)
+    max_gaussians: int = Field(default=250000, ge=4)
+    checkpoint_iterations: list[int] = Field(default_factory=lambda: [3000, 7000])
     timeout_seconds: int = Field(default=14400, ge=1)
+
+    @model_validator(mode="after")
+    def valid_training_schedule(self):
+        if self.densify_until_iter <= self.densify_from_iter:
+            raise ValueError("densify_until_iter must exceed densify_from_iter")
+        if any(step < 1 for step in self.checkpoint_iterations):
+            raise ValueError("checkpoint iterations must be positive")
+        if len(set(self.checkpoint_iterations)) != len(self.checkpoint_iterations):
+            raise ValueError("checkpoint iterations must be unique")
+        return self
 
 
 class ConstructionConfig(Contract):
@@ -241,11 +260,15 @@ class TableSpec(Contract):
     views: list[TableView] = Field(min_length=1)
     # Optional, additional exclusion masks in distorted/original frame coordinates.
     extra_exclusions: dict[str, str] = Field(default_factory=dict)
-    fill: Literal["none", "telea"] = "none"
+    fill: Literal["none", "telea", "patch"] = "none"
+    fusion: Literal["mean", "median"] = "mean"
+    patch_size: int = Field(default=41, ge=3, le=129)
     max_fill_fraction: float = Field(default=0.25, ge=0, le=1)
 
     @model_validator(mode="after")
     def unique(self):
+        if self.patch_size % 2 != 1:
+            raise ValueError("patch_size must be odd")
         if len({v.frame_id for v in self.views}) != len(self.views):
             raise ValueError("duplicate table frame")
         if self.width_m * self.depth_m * self.pixels_per_metre**2 > 32_000_000:

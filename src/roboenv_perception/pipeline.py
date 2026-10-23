@@ -159,7 +159,11 @@ def run_image(
         "status": "running",
         "stages": [],
         "task_context": task or "not_provided",
-        "model_execution": {"vlm": "not_run", "sam3": "not_run"},
+        "segmentation_backend": config.sam.backend,
+        "model_execution": {
+            "vlm": "not_run",
+            ("grounded_sam2" if config.sam.backend == "grounded_sam2" else "sam3"): "not_run",
+        },
     }
     write_json(output / "run.json", run)
     # Never persist expanded authorization headers. Local config files are gitignored.
@@ -223,9 +227,9 @@ def run_image(
             detections, uncertain, issues, rows = stage_segment(
                 segmenter, image, inventory, config, segment_dir
             )
-            run["model_execution"]["sam3"] = (
-                "replayed" if config.sam.backend == "replay" else "executed"
-            )
+            run["model_execution"][
+                "grounded_sam2" if config.sam.backend == "grounded_sam2" else "sam3"
+            ] = "replayed" if config.sam.backend == "replay" else "executed"
         with stage("labels"):
             labels, label_warnings = stage_labels(
                 vlm, frame_path, detections, rows, segment_dir, task, output / "stages/labels"

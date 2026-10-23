@@ -130,26 +130,53 @@ def design_objects(evidence_root: Path, output: Path, config: ConstructionConfig
             context = json.dumps(
                 {
                     "evidence": evidence,
+                    "allowed_view_refs": [v["ref_id"] for v in evidence["views"]],
                     "measurements_m": values,
                     "measurement_note": measurement.note if measurement else None,
                 },
                 ensure_ascii=False,
             )
             try:
-                brief = infer_model(
-                    vlm,
-                    f"{asset_id}-intake",
-                    "Understand this ONE object. "
-                    "Classify its build route. Preserve unknown semantics; determine whether images "
-                    "show viewpoints or actual state changes. Do not decompose yet.\n" + context,
-                    images,
-                    AssetBrief,
-                    output / base / "traces/intake",
-                )
-                if brief.object_id != entry["object_id"]:
-                    raise ValueError("intake changed object identity")
-                if not set(brief.evidence_refs) <= {v["ref_id"] for v in evidence["views"]}:
-                    raise ValueError("intake referenced unknown evidence")
+                intake_feedback = ""
+                for attempt in range(config.design.max_revisions + 1):
+                    suffix = "" if attempt == 0 else f"-{attempt}"
+                    try:
+                        brief = infer_model(
+                            vlm,
+                            f"{asset_id}-intake{suffix}",
+                            "Understand this ONE object. "
+                            f"Copy this exact object_id verbatim: {json.dumps(entry['object_id'])}. "
+                            "asset_id is only a directory label and MUST NOT replace object_id. "
+                            "Classify its build route. Preserve unknown semantics; determine whether images "
+                            "show viewpoints or actual state changes. Do not decompose yet.\n"
+                            + context
+                            + (
+                                "\nRequired correction: " + intake_feedback
+                                if intake_feedback
+                                else ""
+                            ),
+                            images,
+                            AssetBrief,
+                            output / base / f"traces/intake{suffix}",
+                        )
+                        if brief.object_id != entry["object_id"]:
+                            raise ValueError(
+                                "intake changed object identity; copy evidence.object_id exactly"
+                            )
+                        if not set(brief.evidence_refs) <= {v["ref_id"] for v in evidence["views"]}:
+                            raise ValueError(
+                                "intake referenced unknown evidence; allowed view refs: "
+                                + json.dumps([v["ref_id"] for v in evidence["views"]])
+                            )
+                        break
+                    except ValueError as error:
+                        intake_feedback = str(error)
+                        write_json(
+                            output / base / f"traces/intake{suffix}/rejected.json",
+                            {"error": intake_feedback},
+                        )
+                        if attempt == config.design.max_revisions:
+                            raise
                 write_json(output / base / "asset_brief.json", brief.model_dump(mode="json"))
                 if brief.build_route not in {"rigid", "articulated"}:
                     row.update(
@@ -167,7 +194,14 @@ def design_objects(evidence_root: Path, output: Path, config: ConstructionConfig
                         blueprint = infer_model(
                             vlm,
                             f"{asset_id}-blueprint-{revision}",
-                            "Write the engineering blueprint. Copy supplied overall measurements "
+                            "Write the engineering blueprint. "
+                            f"Copy object_id exactly: {json.dumps(entry['object_id'])}; "
+                            f"kind MUST be {json.dumps(brief.build_route)} to match intake. "
+                            "Do not promote a rigid object to articulated for cosmetic details, "
+                            "a mouse button, wheel, or a cap unless intake admitted that articulation. "
+                            "All numeric Quantity values, including assumed joint travel, require "
+                            "nonempty evidence_refs. Use null with source=unknown when unsupported. "
+                            "Copy supplied overall measurements "
                             "exactly. Use null/unknown for ungrounded dimensions. Fixed assets require "
                             "no artificial joint. Every non-root part needs an explicit joint. "
                             "Moving joint axes are in the child's local frame; bounded travel is "
@@ -192,7 +226,16 @@ def design_objects(evidence_root: Path, output: Path, config: ConstructionConfig
                             "Review the exact blueprint against these original references. Check "
                             "functional decomposition, hollow geometry, dimensions, evidence, "
                             "support, hierarchy and motion plausibility. REDO for concrete defects. "
-                            "Unknown values are allowed if explicitly recorded. Echo this exact "
+                            "Unknown values are allowed if explicitly recorded. "
+                            "Different viewpoints, visible seams and mouse buttons alone do not "
+                            "prove articulation or motion states. Do not require extra joints "
+                            "without observed state changes or admitted intake articulation. "
+                            "Accessible hollow cavities are required for observed open containers, "
+                            "not for sealed laptop or mouse internals that are invisible in evidence. "
+                            "Do not invent internal mass distribution or physics requirements. "
+                            "For PASS, findings MUST be an empty array; put nonblocking observations "
+                            "in summary only. For REDO, findings must list concrete defects. "
+                            "Echo this exact "
                             f"blueprint_sha256: {digest}\n"
                             + context
                             + "\n"

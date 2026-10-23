@@ -135,6 +135,42 @@ def write_ply(path, points):
             handle.write(" ".join(map(str, [*p["xyz"], *p["rgb"]])) + "\n")
 
 
+def filter_background_seeds(points, original_images, records, mask_cache, image_cache):
+    """Use actual SfM observations; a projection alone does not establish visibility."""
+    observed_names = {}
+    for image in original_images.values():
+        for _, _, point_id in image["points"]:
+            if point_id >= 0:
+                observed_names.setdefault(point_id, set()).add(image["name"])
+    train_records = {r["image_name"]: r for r in records if r["split"] == "train"}
+    accepted = []
+    for point_id, point in points.items():
+        colors, rejected = [], False
+        xyz = np.asarray(point["xyz"])
+        for name in sorted(observed_names.get(point_id, set()) & train_records.keys()):
+            record = train_records[name]
+            matrix = np.asarray(record["world_to_camera"])
+            camera_point = matrix[:3, :3] @ xyz + matrix[:3, 3]
+            if not np.isfinite(camera_point).all() or camera_point[2] <= 0:
+                rejected = True
+                break
+            pixel = np.asarray(record["intrinsics"]) @ camera_point
+            x, y = np.rint(pixel[:2] / pixel[2]).astype(int)
+            mask = mask_cache[name]
+            if not (0 <= x < mask.shape[1] and 0 <= y < mask.shape[0]) or not mask[y, x]:
+                rejected = True
+                break
+            colors.append(image_cache[name][y, x])
+        if not rejected and len(colors) >= 2:
+            accepted.append(
+                {
+                    "xyz": point["xyz"],
+                    "rgb": np.median(colors, axis=0).astype(int).tolist(),
+                }
+            )
+    return accepted
+
+
 def estimate_background_cameras(
     background: Path, output: Path, config: BackgroundConfig, completion: Path | None = None
 ):
@@ -340,33 +376,11 @@ def estimate_background_cameras(
                     "observed_pixels": int(observed_u.sum()),
                 }
             )
-        # Reproject each sparse point into ALL registered views. Reject a point if any
-        # training view says it belongs to an excluded/unknown region. Conservative by design.
-        # This avoids object points becoming permanent background ghosts.
-        accepted = []
-        for point in original_points.values():
-            colors, rejected = [], False
-            xyz = np.asarray(point["xyz"])
-            for record in records:
-                if record["split"] != "train":
-                    continue
-                matrix = np.asarray(record["world_to_camera"])
-                p = matrix[:3, :3] @ xyz + matrix[:3, 3]
-                if p[2] <= 0:
-                    continue
-                pixel = np.asarray(record["intrinsics"]) @ p
-                x, y = np.rint(pixel[:2] / pixel[2]).astype(int)
-                name = record["image_name"]
-                mask = mask_cache[name]
-                if 0 <= x < mask.shape[1] and 0 <= y < mask.shape[0]:
-                    if not mask[y, x]:
-                        rejected = True
-                        break
-                    colors.append(image_cache[name][y, x])
-            if not rejected and len(colors) >= 2:
-                accepted.append(
-                    {"xyz": point["xyz"], "rgb": np.median(colors, axis=0).astype(int).tolist()}
-                )
+        # An unobserved projection may land on an occluder; only actual SfM tracks
+        # establish visibility. Every training observation in a track must be background.
+        accepted = filter_background_seeds(
+            original_points, original_images, records, mask_cache, image_cache
+        )
         if len(accepted) < 4:
             raise ValueError("too few conservative background seed points; inspect masks/capture")
         write_ply(dataset / "background_points.ply", accepted)
@@ -377,9 +391,11 @@ def estimate_background_cameras(
             {
                 "schema_version": VERSION,
                 "scene_id": data["scene_id"],
+                "source_kind": data.get("fixture", "unclassified_source"),
                 "frames": records,
                 "points_ref": "dataset/background_points.ply",
                 "background_seed_count": len(accepted),
+                "seed_filter": "at least two actual training-track observations; all must be observed background",
                 "scale_status": "arbitrary_SfM_units",
                 "metres_per_sfm_unit": None,
                 "world_frame": "COLMAP world; camera +X right, +Y down, +Z forward",
@@ -387,7 +403,7 @@ def estimate_background_cameras(
                 "physical_geometry": None,
                 "limitations": [
                     "SfM scale and object-local frames still need metric scene alignment.",
-                    "Conservative point filtering may reject occluded real background.",
+                    "Seed tracks touching excluded or unknown training observations are rejected.",
                     "Table atlas dimensions alone do not calibrate the SfM scene scale.",
                 ],
             },
@@ -421,6 +437,7 @@ def train_background(cameras: Path, output: Path, config: BackgroundConfig):
         dst_points.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src_points, dst_points)
         write_json(dataset / "cameras.json", copied)
+        write_json(dataset / "training.json", config.model_dump())
         try:
             revision = subprocess.check_output(
                 ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
@@ -433,6 +450,7 @@ def train_background(cameras: Path, output: Path, config: BackgroundConfig):
             "worker_sha256": sha256(worker),
             "iterations": config.iterations,
             "synthetic_weight": config.synthetic_weight,
+            "training": config.model_dump(),
         }
         run_process(
             [
@@ -448,6 +466,8 @@ def train_background(cameras: Path, output: Path, config: BackgroundConfig):
                 str(config.iterations),
                 "--synthetic-weight",
                 str(config.synthetic_weight),
+                "--training-config",
+                str((dataset / "training.json").resolve()),
             ],
             output.resolve(),
             output / "logs/training.log",

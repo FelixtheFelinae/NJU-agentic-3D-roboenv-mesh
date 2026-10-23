@@ -11,6 +11,34 @@ def region_weights(observed, synthetic, synthetic_weight):
     return observed.astype(np.float32) + synthetic.astype(np.float32) * synthetic_weight
 
 
+def ssim_region_weights(observed, synthetic, synthetic_weight, window_size=11):
+    """Only windows entirely within one provenance region receive SSIM supervision.
+
+    Real/synthetic boundaries and image edges are excluded, as are unknown pixels.
+    This integral-image erosion keeps this contract independent of Torch/OpenCV.
+    """
+    region_weights(observed, synthetic, synthetic_weight)
+    if observed.ndim != 2 or window_size < 1 or window_size % 2 != 1:
+        raise ValueError("SSIM requires 2D masks and an odd positive window size")
+
+    def interior(mask):
+        radius = window_size // 2
+        padded = np.pad(mask.astype(np.int64), radius)
+        integral = np.pad(padded, ((1, 0), (1, 0))).cumsum(0).cumsum(1)
+        counts = (
+            integral[window_size:, window_size:]
+            - integral[:-window_size, window_size:]
+            - integral[window_size:, :-window_size]
+            + integral[:-window_size, :-window_size]
+        )
+        return counts == window_size**2
+
+    return (
+        interior(observed).astype(np.float32)
+        + interior(synthetic).astype(np.float32) * synthetic_weight
+    )
+
+
 def projection_matrix(intrinsics, size, near=0.01, far=100.0):
     """Column-vector +Z-forward projection including off-centre principal points."""
     k = np.asarray(intrinsics, dtype=float)

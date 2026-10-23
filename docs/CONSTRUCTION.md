@@ -27,7 +27,7 @@ scene-perception train-background --cameras outputs/cameras \
 ```
 
 从 `configs/construction.example.toml` 复制本地配置，填写完整 VLM 请求 URL、model，
-通过环境变量提供认证。程序不读取 `.env`。前四阶段可分别执行；桌面补全是可选阶段，
+通过环境变量提供认证。程序不自动读取 `.env`；可用全局参数 `--env-file .env.local` 显式加载密钥。前四阶段可分别执行；桌面补全是可选阶段，
 不需要时省略相机命令的 `--completion`。`scene-perception schemas` 可导出配置、
 蓝图和桌面规范 JSON Schema。退出码 1 表示执行错误，设计有 blocked/failed 对象时为 2；
 成功退出只表示阶段执行完成，所有输出均不声称独立验收通过。
@@ -60,6 +60,8 @@ reference board。按可见面积、纹理清晰度代理和时间间隔选择�
 
 ## C：背景、桌面与 3DGS
 
+桌面资产的米制任务布局、USD 导出与 Isaac Lab 接触验证见 [ISAAC_TABLE](ISAAC_TABLE.md)。
+
 背景准备保留 RGB 原图，只输出监督 mask；独立 mesh、待解决设计、临时对象、未知区域
 和人工排除不进入真实背景监督。边缘可膨胀，阴影和反射须人工检查。`--exclusions`
 接收 frame_id → 二值 PNG 路径的 JSON，相对路径相对于 JSON 文件。
@@ -67,24 +69,46 @@ reference board。按可见面积、纹理清晰度代理和时间间隔选择�
 
 桌面规范示例为 `configs/table.example.json`，数值必须人工替换。同一物理平面区域在各帧的
 四角按 (0,0)、(W,0)、(W,H)、(0,H) 排列，坐标属于原始归一化感知图。
-仅训练帧可靠像素投影到统一 atlas，先融合，再选择 `fill="telea"` 做有限面积的
-外观补全（默认 none）。补全不是语义恢复。atlas 的 provenance 值 0/1/2 分别代表
+仅训练帧可靠像素投影到统一 atlas，先融合，再选择 `fill="telea"` 或 `fill="patch"`
+做有限面积的外观补全（默认 none，受 `max_fill_fraction` 限制）。`fusion="median"`
+可抑制偶发高光，默认 mean 保留历史行为。patch 只从完全由真实观测组成的纹理块取样，
+按已知边界匹配并平移、不旋转木纹；`patch_size` 是奇数像素边长，默认 41。
+补洞边界仅在缺失区域内部融合，已有真实 RGB 不变。`atlas-observed.png` 保存补洞前结果。
+补全不是语义恢复，也不会去除持久阴影或恢复真实反射材质。atlas 的 provenance 值 0/1/2 分别代表
 未知/真实训练观测/合成；再投回各视角，保留原始可靠像素。
 真实 texel 投到另一个被遮挡视角时也只给予弱监督。holdout RGB 不参与 atlas 融合。
 手工桌面尺寸不会自动标定 SfM 尺度。
+
+若只需简化显示，`construction.texture.repeat_texture_material` 可将一块完全观测到的
+干净木纹镜像铺设到整个桌面，避免保留原物体的阴影；重复花纹是预期近似。
+这种材质的所有位置分配均标为合成，不能因源颜色来自照片而当成对应位置的真实观测。
+材质和视觉平面不提供碰撞体，也不证明实际桌面高度或 contact 准确。
 
 相机阶段至少需三个视图，要求一个连通 COLMAP 模型且全部图像注册。
 导出 `cameras.json` 的 pinhole 内参、world_to_camera / camera_to_world、原图与监督图。
 mask 与 RGB 一起去畸变并保守处理边界。坐标为 COLMAP world，camera X-right/Y-down/Z-forward；
 SfM 尺度仍任意，需后续与对象 Z-up 局部系、真实碰撞几何统一对齐。
-只保留在至少两个训练视图中得到可靠背景支持、且未落入其他训练视图排除区的稀疏种子。
-该保守策略可能丢弃被遮挡的真实背景；种子不足会明确失败。
+只保留至少有两个真实训练轨迹观测、且这些观测都落在可靠背景内的稀疏种子。
+没有轨迹观测的投影不证明可见性，不会因为投到遮挡物上就拒绝种子；种子不足会明确失败。
 
-训练 worker 使用固定稀疏种子拓扑的 classic 3DGS 优化基线，不做 densification/pruning。
-L1 区域权重为真实背景 1、补全 `synthetic_weight`、未知和其他排除 0；不使用会跨越
-mask 边界的全图 SSIM。保留未涂黑原图，排除区的 RGB 不提供梯度。
-holdout 仅在真实可见区域计算 MSE；相机恢复可使用全部图像，因此这是外观 holdout，
-不是独立相机测试。worker 兼容旧版与带 cam_infos 的初始化接口，实际兼容性须在
+训练 worker 默认 `training_mode="adaptive"`，使用 classic 3DGS 的增密、分裂、剪枝与
+透明度重置。增密统计只累计收到有效监督梯度的高斯，分裂/克隆候选在分配内存前按
+梯度排序限制，每次密度调整完成后的点数不超过 `max_gaussians`。分裂仍需临时缓冲，
+这个设置不是显存硬上限。默认训练预算 10000 步，增密在
+500～7000 步之间运行，每 100 步调整一次；`training_mode="fixed"` 保留旧 L1 固定点数基线。
+自适应模式的学习率尺度及大高斯剪枝尺度采用训练相机中心半径；固定模式保留种子半径。
+
+L1 区域权重为真实背景 1、补全 `synthetic_weight`、未知和其他排除 0。SSIM 只在
+完整 11×11 窗口属于同一来源（真实或合成）的中心计算，不跨越排除边界、图像边缘或
+真实/合成来源边界；合成窗口仍以弱权重计算。缺少有效窗口时退回纯 L1。
+保留未涂黑原图，未知和排除区的 RGB 不提供损失梯度，也不被当成黑色背景真值。
+
+默认保存第 3000、7000 步和最终步的 PLY、预览及验证误差，存于 `model/checkpoints/`。
+`model/point_cloud.ply` 指向真实可见区域平均 MSE 最低的检查点副本，实际步数记录在
+`model/result.json` 的 `selected_iteration`；训练预算与被选中的步数分别保留。
+没有验证视角时选最终步。相机恢复可使用全部图像，且这些外观验证视角用于模型选择，
+所以不构成独立的相机、几何或最终测试。遮挡区域仍可能存在高斯溢出，不代表已经补全。
+worker 兼容旧版与带 cam_infos 的初始化接口，实际兼容性须在
 用户安装的具体上游提交与 CUDA 扩展上验证；保存 backend revision 与 worker 哈希。
 命令失败、超时均保留日志和返回码，超时清理进程组。
 
@@ -137,14 +161,15 @@ scene-perception demo-construction --output outputs/construction-demo-NEW
 | 对象真实 XYZ 尺寸及测量备注 | `design.measurements` 指向的 JSON | 可暂缺，尺寸保持 unknown |
 | 同一桌面区域的真实宽深、各帧四角 | `--spec` JSON | 真实桌面融合；不能沿用示例数字 |
 
-程序不自动读取 `.env`。如需在远程终端临时输入密钥，可以执行
+程序不自动读取 `.env`；可用 `scene-perception --env-file .env.local ...` 显式加载。
+如需在远程终端临时输入密钥，可以执行
 `read -rsp 'VLM API key: ' VLM_API_KEY`，随后 `export VLM_API_KEY`；
 终端输入不会回显，命令历史也不包含密钥。其他终端设置的环境变量不会自动进入已启动的
 Codex 进程，请在配置完成后告知运行方式，以便从正确环境启动。
 
-依赖安装属于开发环境工作，不需要用户手填：当前还缺 COLMAP、classic 3DGS checkout、
-其 CUDA rasterizer/simple-knn。项目环境已补装 `plyfile==1.1.3`，未改动其他环境。
-真实素材与 checkpoint 尚未配置，因此没有进行实际 VLM/SAM 推理。
+本节早期检查时 COLMAP/3DGS 尚未准备；随后已安装并完成合成三维场景的
+COLMAP 和真实 GPU 短程训练，真实 VLM API 也已接通。当前路径、复现脚本、
+剩余 SAM 权限/素材及验证边界见 [重建运行环境](RECONSTRUCTION_RUNTIME.md)。
 
 官方接口依据（查阅日期 2026-10-22）：
 [视觉理解与结构化输出](https://help.aliyun.com/en/model-studio/vision-model/)、

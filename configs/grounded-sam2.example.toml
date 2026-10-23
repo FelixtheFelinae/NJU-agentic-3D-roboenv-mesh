@@ -1,0 +1,28 @@
+# Copy to a gitignored local TOML. All paths below resolve relative to that file.
+[vlm]
+backend = "http"
+style = "chat_completions"
+endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+model = "qwen3.7-plus"
+json_mode = true
+[vlm.headers]
+Authorization = "Bearer ${VLM_API_KEY}"
+[vlm.extra_body]
+enable_thinking = false
+
+[sam]
+backend = "grounded_sam2"
+checkpoint = "../models/sam2.1_hiera_small.pt"
+# SAM 2 package Hydra config name; do not resolve this as a filesystem path.
+sam2_model_config = "configs/sam2.1/sam2.1_hiera_s.yaml"
+grounding_model_path = "../models/grounding-dino-tiny"
+device = "cuda"
+confidence_threshold = 0.5
+grounding_threshold = 0.3
+grounding_text_threshold = 0.25
+box_fallback = true
+
+[video]
+sample_fps = 5.0
+max_frames = 300
+reference_frame = 0

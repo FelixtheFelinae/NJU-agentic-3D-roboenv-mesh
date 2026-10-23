@@ -375,3 +375,74 @@ def test_readiness_reports_missing_fields_without_disclosing_credentials(tmp_pat
         "cameras.colmap",
         "training.python_dependencies",
     } <= missing
+
+
+def test_intake_identity_is_corrected_by_bounded_retry_without_rewriting_model_output(
+    perception, tmp_path, monkeypatch
+):
+    evidence = tmp_path / "evidence"
+    prepare_objects(perception, evidence, EvidenceConfig())
+    inventory = verify_run(evidence, "objects.json")
+    ids = {entry["asset_id"]: entry["object_id"] for entry in inventory["objects"]}
+    calls = []
+
+    class ConfusedIntake:
+        def infer(self, stage, *args):
+            calls.append(stage)
+            asset = stage.split("-intake")[0]
+            return {
+                "object_id": ids[asset] if stage.endswith("-1") else asset,
+                "category": "fixture",
+                "summary": "fixture",
+                "build_route": "background",
+                "support_mode": "unknown",
+                "reference_interpretation": "single",
+                "evidence_refs": ["view-001"],
+            }
+
+    monkeypatch.setattr(
+        "roboenv_perception.construction.design.make_vlm", lambda *a, **k: ConfusedIntake()
+    )
+    config = ConstructionConfig(vlm=VLMConfig(backend="replay"))
+    config.design.max_revisions = 1
+    output = tmp_path / "design"
+    design_objects(evidence, output, config)
+    assert verify_run(output, "designs.json")["all_designs_ready"]
+    assert len(calls) == len(ids) * 2
+    assert len(list(output.rglob("rejected.json"))) == len(ids)
+    for asset, object_id in ids.items():
+        assert read_json(output / "objects" / asset / "asset_brief.json")["object_id"] == object_id
+
+
+def test_seed_visibility_uses_actual_tracks_and_never_holdout_appearance():
+    from roboenv_perception.construction.reconstruction import filter_background_seeds
+
+    records = [
+        {
+            "image_name": name,
+            "split": split,
+            "world_to_camera": np.eye(4).tolist(),
+            "intrinsics": np.eye(3).tolist(),
+        }
+        for name, split in [
+            ("a", "train"),
+            ("b", "train"),
+            ("occluder", "train"),
+            ("holdout", "holdout"),
+        ]
+    ]
+    points = {1: {"xyz": [1, 1, 1]}, 2: {"xyz": [2, 2, 1]}, 3: {"xyz": [3, 3, 1]}}
+    images = {
+        1: {"name": "a", "points": [(1, 1, 1), (2, 2, 2), (3, 3, 3)]},
+        2: {"name": "b", "points": [(1, 1, 1), (2, 2, 2)]},
+        3: {"name": "occluder", "points": []},
+        4: {"name": "holdout", "points": [(3, 3, 3)]},
+    }
+    masks = {r["image_name"]: np.ones((5, 5), dtype=bool) for r in records}
+    masks["occluder"][:] = False  # Unobserved projection is occluded, not a false background point.
+    masks["b"][2, 2] = False  # An actual foreground/unknown observation must reject the track.
+    masks["holdout"][:] = False
+    colors = {r["image_name"]: np.full((5, 5, 3), 80, dtype=np.uint8) for r in records}
+    colors["holdout"][:] = 255
+    result = filter_background_seeds(points, images, records, masks, colors)
+    assert result == [{"xyz": [1, 1, 1], "rgb": [80, 80, 80]}]

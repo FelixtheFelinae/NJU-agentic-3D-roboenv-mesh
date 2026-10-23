@@ -57,17 +57,46 @@ def check_readiness(
     if perception_path:
         perception = load_config(perception_path)
         vlm_checks("perception.vlm", perception.vlm)
-        add(
-            "perception.sam3_module",
-            importlib.util.find_spec("sam3") is not None,
-            "Install the authorized official SAM3 source.",
-            "dependency",
-        )
-        add(
-            "perception.sam3_checkpoint",
-            bool(perception.sam.checkpoint) and Path(perception.sam.checkpoint).is_file(),
-            "Fill sam.checkpoint with a local authorized SAM3 image checkpoint.",
-        )
+        sam = perception.sam
+        if sam.backend == "replay":
+            add("perception.replay_not_live", False, "Select a live segmentation backend.")
+        else:
+            module = "sam2" if sam.backend == "grounded_sam2" else "sam3"
+            add(
+                f"perception.{module}_module",
+                importlib.util.find_spec(module) is not None,
+                f"Install the official {module} source.",
+                "dependency",
+            )
+            add(
+                f"perception.{module}_checkpoint",
+                bool(sam.checkpoint) and Path(sam.checkpoint).is_file(),
+                f"Fill sam.checkpoint with a local {module} checkpoint.",
+            )
+            if sam.backend == "grounded_sam2":
+                add(
+                    "perception.transformers_module",
+                    importlib.util.find_spec("transformers") is not None,
+                    "Install the grounded-sam2 optional dependencies.",
+                    "dependency",
+                )
+                add(
+                    "perception.grounding_snapshot",
+                    bool(sam.grounding_model_path)
+                    and all(
+                        (Path(sam.grounding_model_path) / name).is_file()
+                        for name in (
+                            "config.json",
+                            "preprocessor_config.json",
+                            "tokenizer_config.json",
+                        )
+                    )
+                    and any(
+                        (Path(sam.grounding_model_path) / name).is_file()
+                        for name in ("model.safetensors", "pytorch_model.bin")
+                    ),
+                    "Set sam.grounding_model_path to a local Grounding DINO snapshot.",
+                )
     add(
         "input.media",
         media is not None and media.is_file(),

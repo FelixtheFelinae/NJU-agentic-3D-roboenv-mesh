@@ -123,3 +123,9 @@ unset PYTHONPATH PYTHONHOME # 避免继承主机 ROS 等其他 Python 环境的�
 背景监督 mask、统一桌面纹理融合/补全、COLMAP 相机和区域加权 3DGS 入口。
 命令、配置模板、工件契约与验证边界见 [构建说明](docs/CONSTRUCTION.md)。
 完整 Coding/Review 构建循环、RoboHelix 与真实素材上的重建验收留待后续。
+
+## 许可证
+
+本项目的一手代码采用 [GNU General Public License v3.0 only](LICENSE)
+(`GPL-3.0-only`)。第三方软件、模型权重、数据集、机器人资产和仿真器保留各自
+的许可证与使用条款。

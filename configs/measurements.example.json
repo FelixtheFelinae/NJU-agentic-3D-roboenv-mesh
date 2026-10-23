@@ -1,0 +1,9 @@
+{
+  "objects": [
+    {
+      "object_id": "REPLACE_WITH_RUN_SCOPED_OBJECT_ID",
+      "dimensions_m": [0.1, 0.08, 0.15],
+      "note": "EXAMPLE ONLY: replace with human measurements along object-local XYZ; describe instrument and uncertainty"
+    }
+  ]
+}

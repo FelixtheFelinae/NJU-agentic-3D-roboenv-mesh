@@ -1,0 +1,19 @@
+{
+  "width_m": 0.8,
+  "width_source": "assumed",
+  "width_evidence": "Provisional G1 tabletop task layout; no measurement or VLM reference-object scale yet.",
+  "top_height_m": 0.75,
+  "height_source": "task_design",
+  "thickness_m": 0.03,
+  "near_edge_x_m": 0.2,
+  "static_friction": 0.6,
+  "dynamic_friction": 0.5,
+  "restitution": 0,
+  "contact_offset_m": 0.002,
+  "rest_offset_m": 0,
+  "dt_seconds": 0.004166666666666667,
+  "solver_position_iterations": 8,
+  "solver_velocity_iterations": 2,
+  "texture": "simple",
+  "robot": "unitree_g1"
+}

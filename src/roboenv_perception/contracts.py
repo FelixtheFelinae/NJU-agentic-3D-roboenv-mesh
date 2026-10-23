@@ -107,12 +107,16 @@ class VLMConfig(Contract):
 
 
 class SAMConfig(Contract):
-    backend: Literal["sam3", "replay"] = "sam3"
+    backend: Literal["sam3", "grounded_sam2", "replay"] = "sam3"
     checkpoint: str = ""
     device: Literal["cuda"] = "cuda"
     confidence_threshold: float = Field(default=0.5, ge=0, le=1)
     box_fallback: bool = True
     replay_manifest: str = ""
+    sam2_model_config: str = "configs/sam2.1/sam2.1_hiera_s.yaml"
+    grounding_model_path: str = ""  # local Transformers snapshot; never downloads implicitly
+    grounding_threshold: float = Field(default=0.3, ge=0, le=1)
+    grounding_text_threshold: float = Field(default=0.25, ge=0, le=1)
 
 
 class ProcessingConfig(Contract):

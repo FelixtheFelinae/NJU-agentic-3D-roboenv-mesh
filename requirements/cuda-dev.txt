@@ -1,0 +1,10 @@
+# Install torch/torchvision from https://download.pytorch.org/whl/cu128 first.
+# Official SAM 3 at 7f473cfd requires NumPy 1.x and imports pkg_resources.
+torch==2.10.0+cu128
+torchvision==0.25.0+cu128
+numpy==1.26.4
+setuptools==80.9.0
+einops==0.8.1
+opencv-python-headless==4.11.0.86
+psutil>=5.9
+pycocotools>=2.0.10

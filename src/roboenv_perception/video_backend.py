@@ -181,3 +181,13 @@ class SAM3VideoBackend:
             self.predictor.shutdown()
         write_json(root / "stages/tracking/manifest.json", record)
         return record
+
+
+def make_video_backend(config):
+    if config.sam.backend == "replay":
+        return ReplayVideoBackend(config.video.replay_manifest)
+    if config.sam.backend == "grounded_sam2":
+        from .grounded_sam2 import GroundedSAM2VideoBackend
+
+        return GroundedSAM2VideoBackend(config.sam)
+    return SAM3VideoBackend(config.sam)

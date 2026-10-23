@@ -34,6 +34,7 @@ def load_config(path: Path) -> PipelineConfig:
         (config.vlm, "replay_dir"),
         (config.sam, "replay_manifest"),
         (config.sam, "checkpoint"),
+        (config.sam, "grounding_model_path"),
         (config.video, "replay_manifest"),
     ]:
         value = getattr(obj, name)

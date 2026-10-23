@@ -1,0 +1,13 @@
+{
+  "width_m": 1.2,
+  "depth_m": 0.6,
+  "pixels_per_metre": 1000,
+  "fill": "none",
+  "fusion": "median",
+  "patch_size": 41,
+  "max_fill_fraction": 0.25,
+  "views": [
+    {"frame_id": "REPLACE_WITH_FRAME_ID", "corners_xy": [[0, 0], [100, 0], [100, 100], [0, 100]]}
+  ],
+  "extra_exclusions": {}
+}

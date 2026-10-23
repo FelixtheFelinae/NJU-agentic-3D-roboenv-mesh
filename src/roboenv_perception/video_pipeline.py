@@ -22,7 +22,7 @@ from .masks import (
 from .pipeline import stage_inventory, stage_labels, stage_segment
 from .runtime import cuda_info
 from .tracking import TrackRegistry
-from .video_backend import ReplayVideoBackend, SAM3VideoBackend, load_frame_detections
+from .video_backend import load_frame_detections, make_video_backend
 from .video_io import decode_video, encode_preview
 from .vlm import make_vlm
 
@@ -49,7 +49,11 @@ def run_video(
         "stages": [],
         "started_at": datetime.now(timezone.utc).isoformat(),
         "execution_mode": "replay" if replayed else "live",
-        "model_execution": {"vlm": "not_run", "sam3": "not_run"},
+        "segmentation_backend": config.sam.backend,
+        "model_execution": {
+            "vlm": "not_run",
+            ("grounded_sam2" if config.sam.backend == "grounded_sam2" else "sam3"): "not_run",
+        },
     }
     write_json(output / "run.json", run)
     safe_config = config.model_dump(mode="json")
@@ -77,11 +81,7 @@ def run_video(
         with stage("environment"):
             if not fixture:
                 run["cuda"] = cuda_info()
-            backend = backend or (
-                ReplayVideoBackend(config.video.replay_manifest)
-                if config.sam.backend == "replay"
-                else SAM3VideoBackend(config.sam)
-            )
+            backend = backend or make_video_backend(config)
             vlm = vlm or make_vlm(config.vlm)
         with stage("decode"):
             (output / "inputs").mkdir(exist_ok=True)
@@ -97,9 +97,9 @@ def run_video(
             )
         with stage("tracking"):
             manifest = backend.track(output, frames, inventory, reference_index)
-            run["model_execution"]["sam3"] = (
-                "replayed" if config.sam.backend == "replay" else "executed"
-            )
+            run["model_execution"][
+                "grounded_sam2" if config.sam.backend == "grounded_sam2" else "sam3"
+            ] = "replayed" if config.sam.backend == "replay" else "executed"
         with stage("reference_labels"):
 
             class ReferenceSegmenter:

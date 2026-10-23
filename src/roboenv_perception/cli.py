@@ -13,6 +13,9 @@ from .validation import validate_bundle
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="CUDA-first VLM + SAM 3 perception and evaluation")
+    parser.add_argument(
+        "--env-file", type=Path, help="Explicit local API secret file; no shell evaluation"
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="Process one image using your configured backends")
     run.add_argument("--image", type=Path, required=True)
@@ -66,8 +69,19 @@ def main(argv=None):
     schema.add_argument("--output", type=Path, required=True)
     doctor = commands.add_parser("doctor", help="Read-only check of remote runtime dependencies")
     doctor.add_argument("--require-cuda", action="store_true")
+    from .construction.cli import add_commands
+
+    add_commands(commands)
     args = parser.parse_args(argv)
     try:
+        if args.env_file:
+            from .secret_env import load_secret_env
+
+            load_secret_env(args.env_file)
+        if hasattr(args, "construction_action"):
+            from .construction.cli import execute
+
+            return execute(args)
         if args.command == "run":
             root = run_image(
                 args.image, args.output, load_config(args.config), args.scene_id, args.task
@@ -162,6 +176,9 @@ def main(argv=None):
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0 if result["valid"] else 1
         elif args.command == "schemas":
+            from .construction.contracts import Blueprint, ConstructionConfig, TableSpec
+            from .construction.simulation import TableSimulationSpec
+
             args.output.mkdir(parents=True, exist_ok=False)
             for name, model in [
                 ("config", PipelineConfig),
@@ -169,6 +186,10 @@ def main(argv=None):
                 ("labels", Labels),
                 ("evaluation", EvaluationManifest),
                 ("truth", TruthDocument),
+                ("construction", ConstructionConfig),
+                ("blueprint", Blueprint),
+                ("table", TableSpec),
+                ("table-simulation", TableSimulationSpec),
             ]:
                 write_json(args.output / f"{name}.schema.json", model.model_json_schema())
         elif args.command == "doctor":
@@ -189,6 +210,8 @@ def main(argv=None):
                         "python": sys.version.split()[0],
                         "torch": torch_installed,
                         "sam3": importlib.util.find_spec("sam3") is not None,
+                        "sam2": importlib.util.find_spec("sam2") is not None,
+                        "transformers": importlib.util.find_spec("transformers") is not None,
                         "cuda": cuda,
                         "note": "No weights downloaded; no API requests or model inference executed.",
                     },

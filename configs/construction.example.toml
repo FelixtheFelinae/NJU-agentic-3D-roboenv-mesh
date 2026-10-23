@@ -1,0 +1,43 @@
+# Copy to configs/local-construction.toml (ignored). This is NOT a working API configuration.
+[vlm]
+backend = "http"
+style = "chat_completions"
+endpoint = ""
+model = ""
+timeout_seconds = 120
+retries = 1
+[vlm.headers]
+Authorization = "Bearer ${VLM_API_KEY}"
+
+[evidence]
+max_views = 6
+min_visible_pixels = 256
+min_time_gap_seconds = 0.5
+crop_padding = 24
+
+[design]
+max_revisions = 2
+measurements = "" # optional measurements JSON; paths resolve relative to this TOML
+
+[background]
+boundary_margin_pixels = 8
+holdout_every = 8
+synthetic_weight = 0.15
+colmap = "colmap" # installed executable, no automatic installation
+matching = "sequential"
+camera_model = "SIMPLE_RADIAL"
+single_camera = true
+use_gpu_features = true
+gaussian_python = "python" # use an absolute path to the separate installed 3DGS environment
+gaussian_repo = "" # installed graphdeco-inria/gaussian-splatting checkout
+iterations = 10000
+training_mode = "adaptive" # "fixed" retains the old L1-only, fixed-point baseline
+ssim_weight = 0.2
+densify_from_iter = 500
+densify_until_iter = 7000
+densification_interval = 100
+densify_grad_threshold = 0.0002
+opacity_reset_interval = 3000
+max_gaussians = 250000
+checkpoint_iterations = [3000, 7000] # final iteration is always saved
+timeout_seconds = 14400

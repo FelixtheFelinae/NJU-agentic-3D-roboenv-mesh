@@ -54,6 +54,14 @@ def apply_appearance(stage, root, work, destination, spec):
              [-w, d, .00015], [w, d, .00015]], material('Keyboard', texture='keyboard.png'))
         quad(basepath+'/lid/ScreenAppearance', [[w, h, -.00015], [-w, h, -.00015],
              [-w, 0, -.00015], [w, 0, -.00015]], material('Screen', texture='screen.png'))
+    elif spec['category'] == 'tablet_case':
+        w, d, h = spec['dimensions_m']
+        quad(
+            basepath + '/TabletCaseTop',
+            [[w / 2, -d / 2, h + .00025], [-w / 2, -d / 2, h + .00025],
+             [-w / 2, d / 2, h + .00025], [w / 2, d / 2, h + .00025]],
+            material('TabletCaseTop', texture='tablet_top.png'),
+        )
     elif spec['category'] == 'mouse':
         data = json.loads((appearance/'projection.json').read_text())
         transform, k = np.array(data['local_to_camera']), np.array(data['intrinsics'])

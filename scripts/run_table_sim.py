@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import time
@@ -13,21 +14,54 @@ def main():
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--g1-reference", type=Path)
+    parser.add_argument("--ground", type=Path, help="Observed ground bundle for bicycle-build")
     parser.add_argument("--gui", action="store_true")
     parser.add_argument("--python", type=Path, default=Path.home()/".local/share/roboenv/isaac-env/bin/python")
     parser.add_argument("--timeout", type=int, default=1800)
-    parser.add_argument("--worker", choices=["table", "assets", "scene-check", "hinge", "robot"], default="table")
+    parser.add_argument("--worker", choices=["table", "assets", "scene-check", "hinge", "robot",
+                                            "audio-assets", "audio-scene-check", "bicycle-build",
+                                            "bicycle-check", "drivetrain-build", "drivetrain-check"], default="table")
     parser.add_argument("--suite", choices=["primary", "followup"])
+    parser.add_argument("--record-orbit-seconds", type=float, default=0)
     args = parser.parse_args()
     if args.output.exists():
         parser.error("output already exists; use a fresh run directory")
     if not args.python.is_file():
         parser.error("separate Isaac Sim Python runtime is missing; see docs/ISAAC_TABLE.md")
+    if not math.isfinite(args.record_orbit_seconds) or args.record_orbit_seconds < 0:
+        parser.error("--record-orbit-seconds must be finite and nonnegative")
+    if args.record_orbit_seconds and args.worker != "audio-scene-check":
+        parser.error("--record-orbit-seconds requires --worker audio-scene-check")
     worker_name = {"table": "isaac_table_worker.py", "assets": "isaac_asset_worker.py",
                    "scene-check": "isaac_scene_check.py", "hinge": "isaac_hinge_worker.py",
-                   "robot": "isaac_robot_worker.py"}[args.worker]
+                   "robot": "isaac_robot_worker.py", "audio-assets": "isaac_audio_scene_worker.py",
+                   "audio-scene-check": "isaac_audio_scene_worker.py",
+                   "bicycle-build": "isaac_bicycle_worker.py",
+                   "bicycle-check": "isaac_bicycle_worker.py",
+                   "drivetrain-build": "isaac_drivetrain_worker.py",
+                   "drivetrain-check": "isaac_drivetrain_worker.py"}[args.worker]
     worker = Path(__file__).resolve().parents[1]/"src/roboenv_perception/construction"/worker_name
-    command = [str(args.python), "-u", str(worker), "--input", str(args.input.resolve()), "--output", str(args.output.resolve())]
+    command = [str(args.python), "-u", str(worker)]
+    if args.worker.startswith("audio-"):
+        command.append("build" if args.worker == "audio-assets" else "check")
+    if args.worker.startswith("bicycle-"):
+        command.append("build" if args.worker == "bicycle-build" else "check")
+        if args.worker == "bicycle-build" and args.ground is None:
+            parser.error("bicycle-build requires --ground")
+    if args.worker.startswith("drivetrain-"):
+        command.append("build" if args.worker.endswith("build") else "check")
+        if args.worker.endswith("build") and args.ground is None:
+            parser.error("drivetrain-build requires --ground")
+    if args.ground:
+        if args.worker not in {"bicycle-build", "drivetrain-build"}:
+            parser.error("--ground requires bicycle-build or drivetrain-build")
+        command.extend(["--ground", str(args.ground.resolve())])
+    source = args.input.resolve()
+    if args.worker == "audio-scene-check" and source.is_dir():
+        source = source / "scene.usda"
+    command.extend(["--input", str(source), "--output", str(args.output.resolve())])
+    if args.record_orbit_seconds:
+        command.extend(["--record-orbit-seconds", str(args.record_orbit_seconds)])
     if args.suite:
         if args.worker != "hinge":
             parser.error("--suite is only supported for hinge tests")
@@ -35,6 +69,8 @@ def main():
     if args.g1_reference:
         command.extend(["--g1-reference", str(args.g1_reference.resolve())])
     if args.gui:
+        if args.worker.startswith(("audio-", "bicycle-", "drivetrain-")):
+            parser.error("audio and bicycle workers currently support headless execution only")
         command.append("--gui")
     environment = dict(os.environ)
     for name in ["PYTHONPATH", "PYTHONHOME"]:

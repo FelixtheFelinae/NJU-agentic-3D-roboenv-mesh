@@ -27,6 +27,7 @@ class DesignConfig(Contract):
 
 class BackgroundConfig(Contract):
     boundary_margin_pixels: int = Field(default=8, ge=0, le=128)
+    sfm_mask_mode: Literal["conservative", "all"] = "conservative"
     holdout_every: int = Field(default=8, ge=2)
     synthetic_weight: float = Field(default=0.15, gt=0, lt=1)
     colmap: str = "colmap"

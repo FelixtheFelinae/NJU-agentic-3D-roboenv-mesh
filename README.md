@@ -52,6 +52,9 @@ export VLM_API_KEY='在你的终端填写密钥'
 
 当前测试视频已增加三物体物理资产构建实验：独立 Coding/Review 上下文、Artisan SDK 编译、Isaac Lab 接触与被动铰链验证，见 [视频物理资产实验](docs/VIDEO_ASSETS.md)。
 
+已增加可选的 [Blender 曲面建模后端](docs/BLENDER_BACKEND.md)：后台生成网格与多角度预览，
+复用 Artisan/Isaac 导出和接触验证；首个试点为白桌视频中的头戴耳机。
+
 ### 离线视频与独立评估
 
 ```bash

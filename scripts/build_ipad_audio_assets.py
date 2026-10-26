@@ -79,25 +79,50 @@ def finish_to_floor(mesh):
 
 def tablet_meshes():
     body = box((0, 0, 0.008), (0.300, 0.230, 0.016))
-    ridge = box((-0.132, 0, 0.019), (0.030, 0.220, 0.006))
+    # The raised folio hinge runs along the near, long edge in the source video.
+    ridge = box((0, -0.102, 0.019), (0.290, 0.030, 0.006))
     case = trimesh.boolean.union([body, ridge], engine="manifold")
     return finish_to_floor(case)
 
 
+def oval_cup(center_x, segments=48):
+    profile = [
+        (0.000, 0.044, 0.054),
+        (0.006, 0.053, 0.064),
+        (0.032, 0.053, 0.064),
+        (0.043, 0.047, 0.057),
+        (0.046, 0.039, 0.049),
+    ]
+    angles = np.arange(segments) * 2 * np.pi / segments
+    rings = [
+        np.column_stack((center_x + rx * np.cos(angles), ry * np.sin(angles),
+                         np.full(segments, z)))
+        for z, rx, ry in profile
+    ]
+    vertices = np.vstack([*rings, [center_x, 0, 0], [center_x, 0, profile[-1][0]]])
+    bottom, top = segments * len(rings), segments * len(rings) + 1
+    faces = []
+    for ring in range(len(rings) - 1):
+        for i in range(segments):
+            a = ring * segments + i
+            b = ring * segments + (i + 1) % segments
+            faces.extend([(a, b, b + segments), (a, b + segments, a + segments)])
+    for i in range(segments):
+        j = (i + 1) % segments
+        faces.extend([(bottom, j, i), (top, (len(rings) - 1) * segments + i,
+                       (len(rings) - 1) * segments + j)])
+    return trimesh.Trimesh(vertices=vertices, faces=np.asarray(faces), process=True)
+
+
 def headphone_meshes():
-    radius = 0.085
-    theta = np.linspace(0, np.pi, 48)
-    path = np.c_[radius * np.cos(theta), radius * np.sin(theta), np.full_like(theta, 0.012)]
-    headband = tube(path, 0.012)
-    left = ellipsoid((-radius, 0, 0.022), (0.048, 0.065, 0.022))
-    right = ellipsoid((radius, 0, 0.022), (0.048, 0.065, 0.022))
-    yoke_left = tube(
-        [(-radius, -0.050, 0.020), (-radius, -0.020, 0.020)], 0.010, segments=12
-    )
-    yoke_right = tube(
-        [(radius, -0.050, 0.020), (radius, -0.020, 0.020)], 0.010, segments=12
-    )
-    mesh = trimesh.boolean.union([headband, left, right, yoke_left, yoke_right], engine="manifold")
+    radius = 0.084
+    theta = np.linspace(0, np.pi, 64)
+    path = np.c_[radius * np.cos(theta), radius * np.sin(theta),
+                 np.full_like(theta, 0.027)]
+    headband = tube(path, 0.013)
+    left = oval_cup(-radius)
+    right = oval_cup(radius)
+    mesh = trimesh.boolean.union([headband, left, right], engine="manifold")
     return finish_to_floor(mesh)
 
 
@@ -159,6 +184,38 @@ def run_tests() -> TestReport:
         "mass": blueprint["parts"][0]["est_mass_kg"],
     }
     (workspace / "model.py").write_text(source)
+
+
+def write_blender_rigid(workspace, blueprint, blender):
+    from roboenv_perception.construction.blender_backend import build_blender_meshes, file_hash
+
+    generator = Path(__file__).with_name("blender") / "headphones.py"
+    result = build_blender_meshes(generator, workspace / "blender", blender=blender)
+    inputs = workspace / "inputs"
+    inputs.mkdir(parents=True, exist_ok=True)
+    source = ["from sdk import ArticulatedObject, mesh_from_input, TestContext, TestReport", "",
+              "def build_object_model():",
+              f"    m = ArticulatedObject(name={blueprint['asset_id']!r})",
+              f"    body = m.part('body', est_mass_kg={blueprint['parts'][0]['est_mass_kg']!r})"]
+    for mesh in result["meshes"]:
+        name = mesh["name"]
+        shutil.copyfile(workspace / "blender" / mesh["file"], inputs / mesh["file"])
+        source.extend([
+            f"    finish = m.material({name!r}, rgba={tuple(mesh['rgba'])!r}, material_class={mesh['material_class']!r})",
+            f"    body.visual(mesh_from_input({name!r}), material=finish, name={name!r})",
+        ])
+    source.extend(["    return m", "", "object_model = build_object_model()", "",
+                   "def run_tests() -> TestReport:", "    return TestContext(object_model).report()", ""])
+    (workspace / "model.py").write_text("\n".join(source))
+    blueprint["mesh_backend"] = "blender"
+    blueprint["mesh_backend_result"] = "blender/result.json"
+    blueprint["mesh_backend_result_sha256"] = file_hash(workspace / "blender/result.json")
+    blueprint["dimensions_m"] = [result["bounds_m"][1][i] - result["bounds_m"][0][i]
+                                 for i in range(3)]
+    blueprint["assumptions"].append(
+        "Blender curved headband, molded shells, hollow earpads and yokes estimated from video; "
+        "all visual components belong to one rigid body; not a measured product CAD model.")
+    (workspace / "build-spec.json").write_text(json.dumps(blueprint, indent=2) + "\n")
 
 
 def write_freeclip(workspace, base, lid, blueprint):
@@ -238,9 +295,14 @@ def main():
         default=Path("/home/felixz/real2sim/R2S2B/sources/Artisan/.artisan/venv/bin/python"),
     )
     parser.add_argument("--tablet-texture", type=Path)
+    parser.add_argument("--mesh-backend", choices=["legacy", "blender"], default="legacy",
+                        help="Headphone geometry backend; tablet and case keep their existing builders")
+    parser.add_argument("--blender", type=Path, help="Blender executable (or use BLENDER_BIN/PATH)")
+    parser.add_argument("--scene-layout", type=Path,
+                        help="Reuse an existing scene-build-spec.json table and placements")
     args = parser.parse_args()
     root = args.root.resolve()
-    root.mkdir(parents=True, exist_ok=True)
+    root.mkdir(parents=True, exist_ok=False)
 
     table_root = root / "table"
     table_root.mkdir(exist_ok=True)
@@ -255,6 +317,7 @@ def main():
         "kind": "rigid",
         "parts": [{"name": "body", "est_mass_kg": 0.85}],
         "dimensions_m": [0.300, 0.230, 0.022],
+        "appearance_top_z_m": 0.016,
         "scale_source": "estimated",
         "scale_relative_uncertainty": 0.08,
         "material": {"rgba": [0.72, 0.69, 0.60, 1], "material_class": "silicone"},
@@ -328,7 +391,11 @@ def main():
         shutil.copyfile(args.tablet_texture, appearance / "tablet_top.png")
     build(tablet_ws, args.artisan_python)
     headphones_ws = root / "objects/asset-0002"
-    write_rigid(headphones_ws, headphone_meshes(), headphones)
+    if args.mesh_backend == "blender":
+        write_blender_rigid(headphones_ws, headphones, args.blender)
+    else:
+        write_rigid(headphones_ws, headphone_meshes(), headphones)
+    (headphones_ws / "appearance").mkdir(exist_ok=True)
     build(headphones_ws, args.artisan_python)
     base, lid = freeclip_meshes()
     freeclip_ws = root / "objects/asset-0005"
@@ -365,6 +432,9 @@ def main():
         "placement_source": "estimated from video views; not a metric pose calibration",
         "scale_source": "estimated from user-confirmed iPad Pro 12.9-inch 2021 and tabletop proportions",
     }
+    if args.scene_layout:
+        scene = json.loads(args.scene_layout.read_text())
+        scene["table_texture"] = str((table_root / "table.png").resolve())
     (root / "scene-build-spec.json").write_text(json.dumps(scene, indent=2) + "\n")
     print(json.dumps({"root": str(root), "objects": [o["asset_id"] for o in scene["objects"]]}))
 

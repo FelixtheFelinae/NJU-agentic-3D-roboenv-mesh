@@ -76,7 +76,11 @@ def prepare_background(
             excluded = dilate(independent | transient | extra, config.boundary_margin_pixels)
             observed = background & ~excluded & ~unknown
             # Static objects can assist pose recovery, but never seed background Gaussians.
-            feature_valid = ~dilate(transient | extra, config.boundary_margin_pixels) & ~unknown
+            feature_valid = (
+                np.ones((size[1], size[0]), dtype=bool)
+                if config.sfm_mask_mode == "all"
+                else ~dilate(transient | extra, config.boundary_margin_pixels) & ~unknown
+            )
             image_ref = copy_ref(bundle, frame["image_ref"], output, f"{base}/image.png")
             save_mask(output / base / "observed.png", observed)
             save_mask(output / base / "excluded.png", excluded)
@@ -107,6 +111,7 @@ def prepare_background(
                 "sources": sources,
                 "camera_status": "not_estimated",
                 "scale_status": "unknown",
+                "sfm_mask_mode": config.sfm_mask_mode,
                 "mask_coordinates": "original normalized perception frame; not undistorted",
                 "holdout_policy": "appearance holdout; cameras may use all frames for SfM",
                 "completion": "not_run",
@@ -116,6 +121,8 @@ def prepare_background(
                     "Unlabelled regions stay unknown.",
                     "Masks do not guarantee removal of shadows/reflections; supply exclusions.",
                     "All exported assets must be excluded from background observations.",
+                    *(["Unmasked SfM assumes all visible features belong to a static scene."]
+                      if config.sfm_mask_mode == "all" else []),
                 ],
             },
         )

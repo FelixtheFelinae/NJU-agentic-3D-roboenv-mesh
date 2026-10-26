@@ -20,6 +20,7 @@ from roboenv_perception.construction.contracts import (
 )
 from roboenv_perception.construction.design import design_objects, validate_blueprint_evidence
 from roboenv_perception.construction.evidence import prepare_objects, select_views
+from roboenv_perception.construction.isaac_audio_scene_worker import table_geometry
 from roboenv_perception.construction.reconstruction import read_colmap_text, run_process
 from roboenv_perception.construction.supervision import projection_matrix, region_weights
 from roboenv_perception.construction.table import complete_table
@@ -81,6 +82,30 @@ def test_evidence_integrity_and_background_exclusion(perception, tmp_path):
     (evidence / record["views"][0]["mask_ref"]).write_bytes(b"corrupted")
     with pytest.raises(ValueError, match="changed or missing"):
         verify_run(evidence, "objects.json")
+
+
+def test_static_scene_sfm_mode_only_changes_feature_mask(perception, tmp_path):
+    conservative = tmp_path / "conservative"
+    unmasked = tmp_path / "unmasked"
+    prepare_background(perception, conservative, BackgroundConfig())
+    prepare_background(perception, unmasked, BackgroundConfig(sfm_mask_mode="all"))
+    frame_a = verify_run(conservative, "background.json")["frames"][0]
+    frame_b = verify_run(unmasked, "background.json")["frames"][0]
+    with Image.open(conservative / frame_a["sfm_mask_ref"]) as image:
+        assert np.asarray(image).min() == 0
+    with Image.open(unmasked / frame_b["sfm_mask_ref"]) as image:
+        assert np.asarray(image).min() == 255
+    assert (conservative / frame_a["observed_mask_ref"]).read_bytes() == (
+        unmasked / frame_b["observed_mask_ref"]
+    ).read_bytes()
+
+
+def test_audio_table_visual_and_collision_extents_agree():
+    geometry = table_geometry(
+        {"width_m": 0.65, "depth_m": 0.62, "top_height_m": 0.75, "thickness_m": 0.03}
+    )
+    vertices = np.asarray(geometry["vertices_local_m"])
+    assert np.allclose(np.ptp(vertices[:, :2], axis=0), geometry["collision_size_m"][:2])
 
 
 def test_time_separation_is_not_claimed_as_camera_diversity():

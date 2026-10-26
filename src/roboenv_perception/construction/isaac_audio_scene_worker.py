@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import shutil
+import subprocess
 import sys
 import traceback
 from pathlib import Path
@@ -27,10 +28,10 @@ def table_geometry(spec):
     )
     return {
         "vertices_local_m": [
-            [-width / 2, -depth / 2, 0],
-            [width / 2, -depth / 2, 0],
-            [width / 2, depth / 2, 0],
-            [-width / 2, depth / 2, 0],
+            [-depth / 2, -width / 2, 0],
+            [depth / 2, -width / 2, 0],
+            [depth / 2, width / 2, 0],
+            [-depth / 2, width / 2, 0],
         ],
         "uv": [[0, 1], [1, 1], [1, 0], [0, 0]],
         "width_m": width,
@@ -309,7 +310,7 @@ def run_build(root, output):
         app.close(wait_for_replicator=False)
 
 
-def run_check(scene, output):
+def run_check(scene, output, record_orbit_seconds=0):
     from isaaclab.app import AppLauncher
 
     launcher = AppLauncher(
@@ -383,7 +384,7 @@ def run_check(scene, output):
         )
         sim.reset()
         camera.set_world_poses_from_view(
-            torch.tensor([[1.00, 0.90, 1.35]], dtype=torch.float32),
+            torch.tensor([[1.00, -0.90, 1.35]], dtype=torch.float32),
             torch.tensor([[0.0, 0.0, 0.82]], dtype=torch.float32),
         )
         for _ in range(4):
@@ -418,6 +419,41 @@ def run_check(scene, output):
             "states": states,
             "scene_sha256": digest(scene),
         }
+        if record_orbit_seconds:
+            fps = 12
+            frame_count = round(record_orbit_seconds * fps)
+            video_path = output / "scene-orbit.mp4"
+            encoder = subprocess.Popen(
+                [
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "960x720",
+                    "-r", str(fps), "-i", "pipe:0", "-an", "-c:v", "libx264",
+                    "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+                    "-movflags", "+faststart", str(video_path),
+                ],
+                stdin=subprocess.PIPE,
+            )
+            try:
+                for index in range(frame_count):
+                    phase = index / max(frame_count - 1, 1)
+                    angle = -1.15 + 0.9 * phase
+                    eye = [[1.35 * math.cos(angle), 1.35 * math.sin(angle), 1.35]]
+                    camera.set_world_poses_from_view(
+                        torch.tensor(eye, dtype=torch.float32),
+                        torch.tensor([[0.0, 0.0, 0.82]], dtype=torch.float32),
+                    )
+                    sim.render()
+                    camera.update(1 / fps, force_recompute=True)
+                    frame = camera.data.output["rgb"][0, ..., :3].cpu().numpy().astype(np.uint8)
+                    encoder.stdin.write(frame.tobytes())
+                    if (index + 1) % fps == 0:
+                        print(f"VIDEO_FRAME {index + 1}/{frame_count}", flush=True)
+            finally:
+                encoder.stdin.close()
+            if encoder.wait(timeout=120) != 0 or not video_path.is_file():
+                raise RuntimeError("scene video encoding failed")
+            result["video_ref"] = video_path.name
+            result["video_seconds"] = frame_count / fps
         (output / "validation.json").write_text(json.dumps(result, indent=2) + "\n")
         print("AUDIO_SCENE_RELOAD", json.dumps(result), flush=True)
         return 0 if result["status"] == "passed" else 2
@@ -438,10 +474,11 @@ def main():
     parser.add_argument("mode", choices=["build", "check"])
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--record-orbit-seconds", type=float, default=0)
     args = parser.parse_args()
     if args.mode == "build":
         return run_build(args.input.resolve(), args.output.resolve())
-    return run_check(args.input.resolve(), args.output.resolve())
+    return run_check(args.input.resolve(), args.output.resolve(), args.record_orbit_seconds)
 
 
 if __name__ == "__main__":

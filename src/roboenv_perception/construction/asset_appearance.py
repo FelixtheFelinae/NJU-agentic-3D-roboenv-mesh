@@ -54,6 +54,62 @@ def apply_appearance(stage, root, work, destination, spec):
              [-w, d, .00015], [w, d, .00015]], material('Keyboard', texture='keyboard.png'))
         quad(basepath+'/lid/ScreenAppearance', [[w, h, -.00015], [-w, h, -.00015],
              [-w, 0, -.00015], [w, 0, -.00015]], material('Screen', texture='screen.png'))
+    elif spec['category'] == 'tablet_case':
+        w, d, h = spec['dimensions_m']
+        top_z = spec.get('appearance_top_z_m', h)
+        top_material = material('TabletCaseTop', texture='tablet_top.png')
+        for prim in stage.Traverse():
+            if not prim.IsA(UsdGeom.Mesh) or not prim.GetName().startswith('vis_'):
+                continue
+            mesh = UsdGeom.Mesh(prim)
+            vertices = np.asarray(mesh.GetPointsAttr().Get())
+            counts = np.asarray(mesh.GetFaceVertexCountsAttr().Get())
+            indices = np.asarray(mesh.GetFaceVertexIndicesAttr().Get())
+            top_faces = []
+            offset = 0
+            for face_id, count in enumerate(counts):
+                face = vertices[indices[offset:offset + count]]
+                if np.all(np.abs(face[:, 2] - top_z) < 1e-4):
+                    top_faces.append(face_id)
+                offset += count
+            if not top_faces:
+                continue
+            uv = np.column_stack((
+                (vertices[:, 0] + w / 2) / w,
+                .84 * (d / 2 - vertices[:, 1]) / d,
+            )).astype(np.float32)
+            UsdGeom.PrimvarsAPI(mesh).CreatePrimvar(
+                'st', Sdf.ValueTypeNames.TexCoord2fArray, 'vertex'
+            ).Set(Vt.Vec2fArray.FromNumpy(uv))
+            subset = UsdGeom.Subset.CreateGeomSubset(
+                mesh, 'TopPhoto', UsdGeom.Tokens.face,
+                Vt.IntArray.FromNumpy(np.asarray(top_faces, dtype=np.int32)), 'materialBind'
+            )
+            UsdShade.MaterialBindingAPI.Apply(subset.GetPrim()).Bind(top_material)
+    elif spec['category'] == 'headphones' and spec.get('mesh_backend') != 'blender':
+        shell = material('HeadphoneShell', (.27, .29, .29))
+        top = material('HeadphoneCupTop', (.34, .36, .36))
+        for prim in stage.Traverse():
+            if not prim.IsA(UsdGeom.Mesh) or not prim.GetName().startswith('vis_'):
+                continue
+            mesh = UsdGeom.Mesh(prim)
+            UsdShade.MaterialBindingAPI.Apply(prim).Bind(shell)
+            vertices = np.asarray(mesh.GetPointsAttr().Get())
+            counts = np.asarray(mesh.GetFaceVertexCountsAttr().Get())
+            indices = np.asarray(mesh.GetFaceVertexIndicesAttr().Get())
+            top_faces = []
+            offset = 0
+            for face_id, count in enumerate(counts):
+                face = vertices[indices[offset:offset + count]]
+                if np.all(face[:, 2] > .0459):
+                    top_faces.append(face_id)
+                offset += count
+            if top_faces:
+                subset = UsdGeom.Subset.CreateGeomSubset(
+                    mesh, 'CupTop', UsdGeom.Tokens.face,
+                    Vt.IntArray.FromNumpy(np.asarray(top_faces, dtype=np.int32)), 'materialBind'
+                )
+                UsdShade.MaterialBindingAPI.Apply(subset.GetPrim()).Bind(top)
     elif spec['category'] == 'mouse':
         data = json.loads((appearance/'projection.json').read_text())
         transform, k = np.array(data['local_to_camera']), np.array(data['intrinsics'])

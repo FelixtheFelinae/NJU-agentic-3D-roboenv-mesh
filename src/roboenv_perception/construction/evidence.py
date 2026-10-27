@@ -1,6 +1,6 @@
 """Select time-separated, visible object evidence without claiming measured view diversity."""
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -69,16 +69,33 @@ def prepare_objects(bundle: Path, output: Path, config: EvidenceConfig):
                     {
                         "frame_id": frame["frame_id"],
                         "timestamp_seconds": frame.get("timestamp_seconds", 0.0),
+                        "timestamp_semantics": frame.get("timestamp_semantics", "elapsed_seconds"),
+                        "source_image_id": frame.get("frame_id") if scene.get("kind") == "image_set" else None,
                         "image_ref": frame["image_ref"],
                         "observation": obj,
                         "quality": observation_quality(image, mask),
                     }
                 )
         entries = []
+        frame_counts = Counter(
+            observation["frame_id"]
+            for observations in groups.values()
+            for observation in observations
+            if observation["quality"]["visible_pixels"] >= config.min_visible_pixels
+        )
+        scene_reference_frame = (
+            min(frame_counts, key=lambda frame: (-frame_counts[frame], frame))
+            if frame_counts else None
+        )
         for i, (object_id, observations) in enumerate(sorted(groups.items())):
             asset_id = f"asset-{i + 1:04d}"
             base = f"objects/{asset_id}"
             selected = select_views(observations, config)
+            anchor = next((o for o in observations if o["frame_id"] == scene_reference_frame
+                           and o["quality"]["visible_pixels"] >= config.min_visible_pixels), None)
+            if anchor and not any(o["frame_id"] == scene_reference_frame for o in selected):
+                selected = [anchor, *selected[:config.max_views - 1]]
+                selected.sort(key=lambda o: o["timestamp_seconds"])
             identity_conflict = any(
                 o["observation"].get("identity_status") == "ambiguous" for o in observations
             )
@@ -112,13 +129,19 @@ def prepare_objects(bundle: Path, output: Path, config: EvidenceConfig):
                     tile.thumbnail((310, 185))
                     board.paste(tile, (col * 320, j * 220 + 25))
                 draw.text(
-                    (5, j * 220 + 5), f"{ref_id}  {obs['timestamp_seconds']:.3f}s", fill="black"
+                    (5, j * 220 + 5),
+                    f"{ref_id}  " + (obs["frame_id"] if scene.get("kind") == "image_set" else f"{obs['timestamp_seconds']:.3f}s"),
+                    fill="black"
                 )
                 refs.append(
                     {
                         "ref_id": ref_id,
                         "frame_id": obs["frame_id"],
+                        "scene_reference": obs["frame_id"] == scene_reference_frame,
                         "timestamp_seconds": obs["timestamp_seconds"],
+                        "timestamp_semantics": obs["timestamp_semantics"],
+                        "source_image_id": obs["source_image_id"],
+                        "reference_interpretation": obj.get("reference_interpretation", "unresolved"),
                         "quality": obs["quality"],
                         "frame_ref": f"{dst}/frame.png",
                         "mask_ref": f"{dst}/mask.png",
@@ -162,7 +185,7 @@ def prepare_objects(bundle: Path, output: Path, config: EvidenceConfig):
                 "instance_part_boundary": "parented perception instances are evidence for the parent, not automatically separate assets",
                 "observation_count": len(observations),
                 "known_categories": sorted(categories),
-                "selection": "visibility/texture rank and timestamp separation; camera diversity unmeasured",
+                "selection": "visibility/texture rank plus common scene reference frame when visible; camera diversity unmeasured",
                 "board_ref": f"{base}/references.png" if refs else None,
                 "camera_and_scale": "not_estimated",
                 "ground_truth_accuracy": None,

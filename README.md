@@ -10,7 +10,24 @@ DATA is All you Need！
 
 固定流程：图片 → VLM 候选清单 → SAM 3 分割 → 规则整理 → VLM 实例语义 → 用途分流 → 对象包、背景包、检查报告。
 
-固定流水线已支持单张图片、离线视频和独立标注评估。正式运行统一使用 **Linux + NVIDIA CUDA**；Mac 使用你现有的 SSH 方式连接服务器，不提供单独启动器。通用场景 Agent、跨独立输入身份融合及最终机器人 Benchmark 仍待后续整合；当前视频的 mesh/3DGS 与物理资产实验见下文。
+固定流水线已支持单张图片、离线视频和独立标注评估。正式运行统一使用 **Linux + NVIDIA CUDA**；Mac 使用你现有的 SSH 方式连接服务器，不提供单独启动器。自动构建入口见下方 Harness；跨独立输入的可靠身份融合及机器人 Benchmark 仍未完成。
+
+### 从描述和视频／多图自动构建
+
+新增 `scene-harness`：任务描述和媒体输入 → VLM/SAM → 对象证据与可选公开资料检索
+→ 部件／关节蓝图 → Blender 网格与 Artisan 导出 → 独立视觉审查与有限重建
+→ 场景组装 → Isaac 受力测试 → 原始任务覆盖审查与交付。
+所有候选、失败、来源和阶段产物均记录哈希；支持相同输入的断点恢复。
+
+```bash
+.venv/bin/python -m roboenv_perception.harness.cli --help
+```
+
+配置、实际入口、运行命令和验证记录见 [Agentic Harness](docs/AGENTIC_HARNESS.md)。
+通用 worker 已在真实 Isaac 中验证刚体推碰、被动铰链和理想固定比传动；
+完整图片重建的交付仍逐次接受视觉与物理审查，失败或证据不足保留 `unverified`。
+当前视觉复审已出现误判；`verified` 表示程序门禁通过，仍需结合实际渲染和实验范围判断。
+这次运行的成功、失败及复审反例见 [运行记录](docs/AGENTIC_HARNESS.md)。
 
 ### CUDA 服务器准备
 
@@ -125,7 +142,8 @@ unset PYTHONPATH PYTHONHOME # 避免继承主机 ROS 等其他 Python 环境的�
 现有 VLM + SAM3 后新增对象多视角证据、理解/蓝图/哈希自检与 Coding 交接、
 背景监督 mask、统一桌面纹理融合/补全、COLMAP 相机和区域加权 3DGS 入口。
 命令、配置模板、工件契约与验证边界见 [构建说明](docs/CONSTRUCTION.md)。
-完整 Coding/Review 构建循环、RoboHelix 与真实素材上的重建验收留待后续。
+新的自动构建与复审循环见 [Agentic Harness](docs/AGENTIC_HARNESS.md)；
+RoboHelix 接入和机器人任务验收尚未完成。
 
 ## 许可证
 

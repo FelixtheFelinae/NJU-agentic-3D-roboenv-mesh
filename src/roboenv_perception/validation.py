@@ -22,10 +22,19 @@ def validate_bundle(root: Path) -> dict:
             if not path.is_file() or sha256(path) != expected:
                 errors.append(f"missing or changed artifact: {ref}")
         scene = read_json(root / "scene.json")
-        if scene.get("kind") == "video":
+        if scene.get("kind") in {"video", "image_set"}:
             from .video_validation import validate_video_contents
 
             validate_video_contents(root, scene, errors)
+            if scene.get("kind") == "image_set":
+                manifest = read_json(relative_file(root, scene["source_manifest_ref"]))
+                if len(manifest.get("images", [])) != len(scene["frames"]):
+                    errors.append("image-set source manifest does not match frames")
+                for item, frame in zip(manifest.get("images", []), scene["frames"]):
+                    if (item.get("source_ref") != frame.get("source_ref")
+                            or item.get("sha256") != frame.get("source_sha256")
+                            or sha256(relative_file(root, item["source_ref"])) != item["sha256"]):
+                        errors.append("image-set source changed or is mismatched")
             quality = read_json(relative_file(root, scene["quality_ref"]))
             return {
                 "valid": not errors,

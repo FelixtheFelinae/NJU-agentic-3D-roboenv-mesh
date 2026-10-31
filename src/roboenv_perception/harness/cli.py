@@ -14,6 +14,8 @@ def main(argv=None) -> int:
     media.add_argument("--video", type=Path)
     media.add_argument("--images", nargs="+", type=Path)
     parser.add_argument("--scene-id", default="scene")
+    parser.add_argument("--assembly-overrides", type=Path,
+                        help="JSON mapping object_id to AssemblyPlan; corrections are audited and hashed")
     parser.add_argument("--perception-config", type=Path, required=True)
     parser.add_argument("--construction-config", type=Path, required=True)
     parser.add_argument("--artisan-python", type=Path, required=True)
@@ -34,13 +36,15 @@ def main(argv=None) -> int:
     parser.add_argument("--no-physics", action="store_true")
     parser.add_argument("--no-scene", action="store_true")
     parser.add_argument("--background-mode", choices=["off", "masks", "auto"], default="auto")
+    parser.add_argument("--background-generation-config", type=Path,
+                        help="Opt in to local image completion; model weights must already be installed")
     args = parser.parse_args(argv)
     if args.env_file:
         from ..secret_env import load_secret_env
 
         load_secret_env(args.env_file)
     request = HarnessRequest(scene_id=args.scene_id, task=args.task, video=args.video,
-                             images=args.images or [])
+                             images=args.images or [], assembly_overrides=args.assembly_overrides)
     settings = HarnessSettings(perception_config=args.perception_config,
                                construction_config=args.construction_config,
                                artisan_python=args.artisan_python,
@@ -57,7 +61,8 @@ def main(argv=None) -> int:
                                allow_category_search=args.allow_category_search,
                                enable_scene_assembly=not args.no_scene,
                                enable_physics=not args.no_physics,
-                               background_mode=args.background_mode)
+                               background_mode=args.background_mode,
+                               background_generation_config=args.background_generation_config)
     result = run_harness(request, settings, args.output)
     print(json.dumps({"status": result["status"], "delivery": result["delivery_path"],
                       "scene_usd": result["scene_usd"]}, ensure_ascii=False))

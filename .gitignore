@@ -17,3 +17,10 @@ test_media/images/*
 !test_media/images/.gitkeep
 test_media/videos/*
 !test_media/videos/.gitkeep
+
+# Local-only cart driving demo and desktop viewers.
+/experiments/cart_background/drive.py
+/experiments/cart_background/check_drive.py
+/experiments/cart_background/keyboard_viewer.py
+/experiments/cart_background/viewer.py
+configs/local-deepseek.env

@@ -17,6 +17,8 @@ from ..io import load_config, read_json, relative_file, sha256, write_json
 from ..pipeline import run_image
 from ..validation import validate_bundle
 from ..video_pipeline import run_video
+from .assembly import ASSEMBLY_INTENT, AssemblyPlan, infer_connections, persist_audit
+from .assembly_adapter import recipe_parts
 from .geometry import build_recipe, infer_recipe, review_geometry
 from .media import run_images
 from .research import research_objects
@@ -28,6 +30,7 @@ class HarnessRequest(Contract):
     task: str = Field(min_length=3, max_length=4000)
     video: Path | None = None
     images: list[Path] = Field(default_factory=list, max_length=32)
+    assembly_overrides: Path | None = None
 
     @model_validator(mode="after")
     def one_media_mode(self):
@@ -57,6 +60,13 @@ class HarnessSettings(Contract):
     enable_scene_assembly: bool = True
     enable_physics: bool = True
     background_mode: Literal["off", "masks", "auto"] = "auto"
+    background_generation_config: Path | None = None
+
+    @model_validator(mode="after")
+    def generation_needs_background(self):
+        if self.background_generation_config and self.background_mode == "off":
+            raise ValueError("background generation cannot be requested with background_mode=off")
+        return self
 
 
 class HarnessFailure(RuntimeError):
@@ -68,8 +78,17 @@ def _fingerprint(request: HarnessRequest, settings: HarnessSettings) -> dict:
              settings.artisan_python, *(request.images or ([request.video] if request.video else []))]
     if settings.blender:
         paths.append(settings.blender)
+    if request.assembly_overrides:
+        paths.append(request.assembly_overrides)
     if settings.isaac_python:
         paths.append(settings.isaac_python)
+    if settings.background_generation_config:
+        paths.append(settings.background_generation_config)
+        from ..construction.background_generation import load_background_generation_config
+
+        generation = load_background_generation_config(settings.background_generation_config)
+        paths.extend(p for p in generation.model_path.rglob("*")
+                     if p.is_file() and ".cache" not in p.relative_to(generation.model_path).parts)
     perception = load_config(settings.perception_config)
     construction = load_construction_config(settings.construction_config)
     for filename in (construction.design.measurements, perception.sam.replay_manifest,
@@ -167,7 +186,9 @@ def _perception(path: Path, request: HarnessRequest, config):
 def _build_assets(path: Path, designs: Path, evidence: Path, research: Path,
                   settings: HarnessSettings, config, deadline: float,
                   previous_assets: Path | None = None,
-                  repair_feedback: dict[str, list[str]] | None = None):
+                  repair_feedback: dict[str, list[str]] | None = None,
+                  assembly_required: bool = False,
+                  assembly_overrides: dict | None = None):
     path.mkdir(parents=True, exist_ok=False)
     design_index = read_json(designs / "designs.json")
     research_map = read_json(research / "research.json").get("objects", {})
@@ -186,6 +207,23 @@ def _build_assets(path: Path, designs: Path, evidence: Path, research: Path,
         observation = read_json(evidence / f"objects/{asset_id}/evidence.json")
         images = [relative_file(evidence, view["context_ref"]) for view in observation["views"]]
         web_claims = research_map.get(object_id, {}).get("claims", [])
+        if assembly_required:
+            context = {
+                'task': 'Infer mechanically plausible fastening hypotheses for this asset; '
+                        'return a JSON instance, never the schema itself.',
+                'blueprint': blueprint.model_dump(mode='json'),
+                'allowed_refs': [v['ref_id'] for v in observation['views']],
+                'image_order': [v['ref_id'] for v in observation['views']],
+                'external_claims': web_claims,
+            }
+            try:
+                reasoning = infer_connections(config.vlm, context, images,
+                                               path / asset_id / 'assembly_reasoning')
+                observation = {**observation, 'assembly_reasoning': reasoning.model_dump(mode='json')}
+            except Exception as error:
+                write_json(path / asset_id / 'assembly_reasoning/failure.json',
+                           {'error': f'{type(error).__name__}: {error}',
+                            'status': 'proposal_unavailable; geometry-stage reasoning still required'})
         row = {"asset_id": asset_id, "object_id": object_id, "build_status": "unverified",
                "attempts": []}
         issues = repair_feedback.get(asset_id, [])
@@ -203,6 +241,16 @@ def _build_assets(path: Path, designs: Path, evidence: Path, research: Path,
                 recipe = infer_recipe(config.vlm, blueprint, observation, images,
                                       candidate_dir / "author", issues, web_claims, prior_recipe)
                 prior_recipe = recipe.model_dump(mode="json")
+                if assembly_overrides and object_id in assembly_overrides:
+                    recipe.assembly = AssemblyPlan.model_validate(assembly_overrides[object_id])
+                    write_json(candidate_dir / 'assembly_override.json', assembly_overrides[object_id])
+                    write_json(candidate_dir / 'author/recipe.json', recipe.model_dump(mode='json'))
+                    prior_recipe = recipe.model_dump(mode='json')
+                allowed_refs = {v['ref_id'] for v in observation['views']}
+                allowed_refs.update(c['source_id'] for c in web_claims if c.get('status') == 'candidate')
+                assembly = persist_audit(candidate_dir / 'assembly', recipe_parts(blueprint, recipe),
+                                         recipe.assembly, allowed_refs=allowed_refs,
+                                         required=assembly_required)
                 built = build_recipe(blueprint, recipe, candidate_dir / "built",
                                      artisan_python=settings.artisan_python,
                                      blender=settings.blender,
@@ -218,6 +266,9 @@ def _build_assets(path: Path, designs: Path, evidence: Path, research: Path,
                                model_ref=str((candidate_dir / "built/model.py").resolve()),
                                preview_refs=built["visual_previews"], physics_status="not_run",
                                physics_notes=built.get("physics_notes", []))
+                    row.update(assembly_status=assembly['status'],
+                               assembly_report=str((candidate_dir / 'assembly/assembly_validation.json').resolve()),
+                               assembly_report_sha256=sha256(candidate_dir / 'assembly/assembly_validation.json'))
                     break
                 issues = review.issues
             except Exception as error:
@@ -424,6 +475,9 @@ def _background(path: Path, perception: Path, designs: Path, config,
 
     path.mkdir(parents=True, exist_ok=False)
     report = {"status": "not_run", "stages": {}, "physical_collision": False}
+    if settings.background_generation_config:
+        report["generation_requested"] = True
+        report["generation"] = {"status": "not_run"}
     if settings.background_mode == "off":
         write_json(path / "background_result.json", report)
         return "background_result.json"
@@ -459,6 +513,25 @@ def _background(path: Path, perception: Path, designs: Path, config,
     except Exception as error:
         report["error"] = f"{type(error).__name__}: {error}"
         report["status"] = "partial" if report["stages"] else "failed"
+    # Completion uses prepared masks even when optional COLMAP/GS is unavailable.
+    if settings.background_generation_config and report["stages"].get("masks") == "completed":
+        try:
+            from ..construction.background_generation import (
+                complete_prepared_background,
+                load_background_generation_config,
+            )
+
+            generation = load_background_generation_config(settings.background_generation_config)
+            remaining = int(deadline - time.monotonic())
+            if remaining < 10:
+                raise RuntimeError("wall-time budget exhausted before optional background generation")
+            generation = generation.model_copy(update={"timeout_seconds": min(generation.timeout_seconds, remaining)})
+            report["generation"] = complete_prepared_background(path / "prepared", path / "generated", generation)
+            report["stages"]["local_generation"] = "completed"
+        except Exception as error:
+            report["generation"] = {"status": "failed", "error": f"{type(error).__name__}: {error}"}
+        # A generated image is delivered separately; no silent scene/physics replacement.
+        report["generation"]["scene_integration"] = "not_run; use explicit fixed-view background display"
     write_json(path / "background_result.json", report)
     return "background_result.json"
 
@@ -469,10 +542,21 @@ def _package(path: Path, request: HarnessRequest, stages: dict[str, Path]):
     scene = read_json(stages["scene"] / "scene_result.json")
     physics = read_json(stages["physics"] / "physics.json")
     physical_status = {item["asset_id"]: item["status"] for item in physics.get("results", [])}
+    review_flags = []
     for asset in assets["objects"]:
+        if asset.get('assembly_status') not in {None, 'not_applicable'}:
+            review_flags.append({'code': 'assembly_dynamics_unverified', 'asset_id': asset['asset_id'],
+                                 'reason': 'Connection geometry checked; preload, release and load transfer not verified.'})
         if asset.get("build_status") == "visual_review_passed":
             asset["physics_status"] = physical_status.get(asset["asset_id"], physics["status"])
     background = read_json(stages["background"] / "background_result.json")
+    if background.get("generation_requested"):
+        generated = background.get("generation", {})
+        if generated.get("status") != "generated":
+            review_flags.append({"code": "background_generation_incomplete", "status": generated.get("status")})
+        else:
+            review_flags.append({"code": "generated_background_visual_review_pending",
+                                 "reason": "2D appearance candidate; not loaded or reviewed as a complete environment."})
     research = read_json(stages["research"] / "research.json")
     task_scope = read_json(stages["task_scope"] / "task_scope.json")
     design = read_json(stages["design"] / "designs.json")
@@ -482,7 +566,6 @@ def _package(path: Path, request: HarnessRequest, stages: dict[str, Path]):
     design_run = read_json(stages["design"] / "run.json")
     quality = read_json(relative_file(stages["perception"], perception["quality_ref"]))
     evidence_index = read_json(stages["evidence"] / "objects.json")
-    review_flags = []
     if not scope_plan.get("all_resolved"):
         review_flags.append({"code": "object_scope_unresolved"})
     if perception_run.get("execution_mode") == "replay":
@@ -556,6 +639,8 @@ def run_harness(request: HarnessRequest, settings: HarnessSettings, output: Path
     perception_config = load_config(settings.perception_config)
     construction_config = load_construction_config(settings.construction_config)
     paths = {}
+    assembly_overrides = read_json(request.assembly_overrides) if request.assembly_overrides else {}
+    assembly_required = bool(ASSEMBLY_INTENT.search(request.task))
     try:
         paths["perception"] = _stage(output, state, "perception",
                                      lambda path: _perception(path, request, perception_config))
@@ -588,7 +673,9 @@ def run_harness(request: HarnessRequest, settings: HarnessSettings, output: Path
         paths["assets"] = _stage(output, state, "assets",
                                  lambda path: _build_assets(path, paths["design"], paths["evidence"],
                                                             paths["research"], settings,
-                                                            construction_config, deadline))
+                                                            construction_config, deadline,
+                                                            assembly_required=assembly_required,
+                                                            assembly_overrides=assembly_overrides))
         if settings.enable_scene_assembly:
             paths["scene"] = _stage(output, state, "scene",
                                     lambda path: _assemble(path, paths["assets"], paths["evidence"], request))
@@ -623,7 +710,9 @@ def run_harness(request: HarnessRequest, settings: HarnessSettings, output: Path
                                      lambda path: _build_assets(path, paths["design"], paths["evidence"],
                                                                 paths["research"], settings,
                                                                 construction_config, deadline,
-                                                                previous_assets, feedback))
+                                                                previous_assets, feedback,
+                                                                assembly_required=assembly_required,
+                                                                assembly_overrides=assembly_overrides))
             paths["scene"] = _stage(output, state, f"scene-{suffix}",
                                     lambda path: _assemble(path, paths["assets"], paths["evidence"], request))
             paths["physics"] = _stage(output, state, f"physics-{suffix}",

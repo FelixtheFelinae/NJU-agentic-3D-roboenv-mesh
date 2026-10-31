@@ -20,13 +20,16 @@ from ..construction.design import infer_model
 from ..contracts import Contract, VLMConfig
 from ..io import read_json, sha256, write_json
 from ..vlm import make_vlm
+from .assembly import ASSEMBLY_PROMPT, AssemblyPlan
 
 
 class Solid(Contract):
     name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
     part: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
     shape: Literal["box", "cylinder", "ellipsoid", "torus", "tube", "hollow_box", "hollow_cylinder",
-                   "prism", "frustum", "hollow_prism", "lathe"]
+                   "prism", "frustum", "hollow_prism", "lathe", "annulus"]
+    assembly_role: Literal["solid", "fastener_head", "fastener_shaft", "washer", "nut"] = "solid"
+    inner_radius_m: float | None = None
     center_m: tuple[float, float, float] = (0.0, 0.0, 0.0)
     rotation_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0)
     size_m: tuple[float, float, float] | None = None
@@ -37,11 +40,18 @@ class Solid(Contract):
     length_m: float | None = None
     tube_end_m: tuple[float, float, float] | None = None
     rgba: tuple[float, float, float, float] = (0.6, 0.6, 0.6, 1.0)
+    material_class: Literal["matte_plastic", "rubber", "steel"] = "matte_plastic"
     source: Literal["observed", "reference", "estimated", "assumed"]
     evidence_refs: list[str] = Field(min_length=1)
 
     @model_validator(mode="after")
     def legal_geometry(self):
+        if self.shape == "annulus":
+            if any(v is None or not math.isfinite(v) or v <= 0
+                   for v in (self.radius_m, self.inner_radius_m, self.length_m)):
+                raise ValueError("annulus requires positive finite outer/inner radii and length")
+            if self.inner_radius_m >= self.radius_m:
+                raise ValueError("annulus bore must be smaller than outer radius")
         coordinates = [*self.center_m, *self.rotation_rpy, *self.rgba]
         if not all(math.isfinite(v) for v in coordinates) or not all(0 <= v <= 1 for v in self.rgba):
             raise ValueError("geometry coordinates and color must be finite")
@@ -103,6 +113,7 @@ class GeometryRecipe(Contract):
     joint_placements: list[JointPlacement] = Field(default_factory=list)
     part_masses_kg: dict[str, float] = Field(default_factory=dict)
     notes: list[str] = Field(default_factory=list)
+    assembly: AssemblyPlan | None = None
 
     def check_against(self, blueprint: Blueprint, allowed_refs: set[str]):
         if self.object_id != blueprint.object_id:
@@ -175,7 +186,13 @@ GEOMETRY_SYSTEM = (
     "If the blueprint declares an ideal joint coupling, keep both shaft parts and their "
     "clearances; the coupling is authored by Artisan, not by a decorative chain mesh. "
     "Evidence refs must come from the supplied allowed list. Mark inferred dimensions estimated/assumed. "
-    "Assign a provisional mass in kilograms for each physical part; it is not a measurement."
+    "Assign a provisional mass in kilograms for each physical part; it is not a measurement. "
+    "When fasteners are present, provide assembly connections with actual solid names and "
+    "mark head/shaft solids with assembly_role=fastener_head/fastener_shaft. Keep the fastener "
+    "and each clamped/mating member as distinct parts. Use annulus for a through-bored "
+    "washer or simplified nut: radius_m outer, inner_radius_m bore, length_m thickness. "
+    "A hollow_cylinder has a closed bottom and is NOT a through hole. "
+    + ASSEMBLY_PROMPT
 )
 
 
@@ -258,7 +275,7 @@ def _model_source(blueprint: Blueprint, recipe: GeometryRecipe) -> str:
         lines.append(f"    p{i} = m.part({p.name!r}, est_mass_kg={recipe.part_masses_kg[p.name]!r})")
         for j, solid in enumerate(solids[p.name]):
             mat = f"mat_{i}_{j}"
-            lines.append(f"    {mat} = m.material({mat!r}, rgba={solid.rgba!r}, material_class='matte_plastic')")
+            lines.append(f"    {mat} = m.material({mat!r}, rgba={solid.rgba!r}, material_class={solid.material_class!r})")
             lines.append(f"    p{i}.visual(mesh_from_input({solid.name!r}), material={mat}, name={solid.name!r})")
     for joint in blueprint.joints:
         placement = placements[joint.name]
@@ -273,6 +290,11 @@ def _model_source(blueprint: Blueprint, recipe: GeometryRecipe) -> str:
         if bounded_continuous:
             bound = coupled_bounds[joint.name]
             args.append(f"motion_limits=MotionLimits(lower={-bound!r}, upper={bound!r})")
+        elif joint.type == "continuous":
+            if joint.effort_limit.value is None or joint.velocity_limit.value is None:
+                raise ValueError(f"continuous joint {joint.name} needs explicit effort_limit and velocity_limit quantities")
+            args.append("motion_limits=MotionLimits("
+                        f"effort={joint.effort_limit.value!r}, velocity={joint.velocity_limit.value!r})")
         elif joint.type in {"revolute", "prismatic"}:
             span = joint.travel.value if joint.travel.value is not None else (math.pi / 2 if joint.type == "revolute" else 0.05)
             lower = -span if joint.rest == "at_max" else -span / 2 if joint.rest == "centered" else 0.0

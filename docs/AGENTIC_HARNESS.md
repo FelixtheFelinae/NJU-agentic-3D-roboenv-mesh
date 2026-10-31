@@ -1,5 +1,12 @@
 # 从视频或图片构建交互场景：当前 Harness
 
+紧固件候选推断、装配几何检查与本轮小车修复见 [装配关系推断与几何复审](HARNESS_ASSEMBLY.md)。
+
+用于机器人操作的资产还需遵守 [物理资产要求](PHYSICAL_ASSET_REQUIREMENTS.md)：接触承压、双向反力、连接解除与功能对照均需证据；文档要求不等于已实现的自动验证。
+
+框架暂定名为 **EnvCreator**。`envcreator generate` 复用本文的生成入口；场景交付与
+ClawSpine 原生机器人运行的连接见 [EnvCreator × ClawSpine](ENVCREATOR_CLAWSPINE.md)。
+
 记录日期：2026-10-27。入口是 `src/roboenv_perception/harness/cli.py` 的 `scene-harness`
 （或 `python -m roboenv_perception.harness.cli`）。给一段明确物体与交互的任务描述，
 再给一个视频或一组图片；输出目录必须是新路径。`run.py:run_harness` 按阶段保存状态，

@@ -1,0 +1,347 @@
+{
+  "topic": "front-wheel assembly-aware tool interaction; planning and research only",
+  "date": "2026-10-27",
+  "repository_head": "900e53d468593023611ae53da9b70ae941c82def",
+  "implementation_changes": false,
+  "new_simulation_runs": false,
+  "sources": [
+    {
+      "id": "L01",
+      "title": "JoinABLe: Learning Bottom-up Assembly of Parametric CAD Joints",
+      "year": 2022,
+      "publication": "CVPR 2022",
+      "url": "https://arxiv.org/html/2111.12772v2",
+      "checked_locations": [
+        "3.2",
+        "3.3",
+        "3.5",
+        "6"
+      ],
+      "read_scope": "primary_full_text_sections",
+      "applicability": "B-Rep rigid mating; not mesh fastener dynamics",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false,
+      "additional_urls": [
+        "https://openaccess.thecvf.com/content/CVPR2022/html/Willis_JoinABLe_Learning_Bottom-Up_Assembly_of_Parametric_CAD_Joints_CVPR_2022_paper.html"
+      ]
+    },
+    {
+      "id": "L02",
+      "title": "Assemble Them All: Physics-Based Planning for Generalizable Assembly by Disassembly",
+      "year": 2022,
+      "publication": "ACM TOG / SIGGRAPH Asia 2022",
+      "url": "https://people.csail.mit.edu/yunsheng/Assemble-Them-All/paper.pdf",
+      "checked_locations": [
+        "3",
+        "4.1-4.4"
+      ],
+      "read_scope": "primary_full_text_sections",
+      "applicability": "Known rigid assemblies and motion paths; not calibrated unfastening",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false,
+      "additional_urls": [
+        "https://assembly.csail.mit.edu/"
+      ]
+    },
+    {
+      "id": "L03",
+      "title": "ASAP: Automated Sequence Planning for Complex Robotic Assembly with Physical Feasibility",
+      "year": 2024,
+      "publication": "ICRA 2024; preprint 2023",
+      "url": "https://asap.csail.mit.edu/",
+      "checked_locations": [
+        "Disassembly Tree Search",
+        "Gravitational Stability Check",
+        "Robotic Demonstration"
+      ],
+      "read_scope": "author_project_and_abstract",
+      "applicability": "Separate path, gravity/support and execution conditions; quantitative comparison excludes robot constraints",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false,
+      "additional_urls": [
+        "https://arxiv.org/abs/2309.16909"
+      ]
+    },
+    {
+      "id": "L04",
+      "title": "Factory: Fast Contact for Robotic Assembly",
+      "year": 2022,
+      "publication": "RSS 2022",
+      "url": "https://www.roboticsproceedings.org/rss18/p035.pdf",
+      "checked_locations": [
+        "I",
+        "III",
+        "IV-A",
+        "V-D",
+        "V-F",
+        "VII-A"
+      ],
+      "read_scope": "primary_full_text_sections",
+      "applicability": "Detailed contact and screw task; outside chosen simplified thread model",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false,
+      "additional_urls": [
+        "https://arxiv.org/html/2205.03532",
+        "https://research.nvidia.com/publication/2022-05_factory-fast-contact-robotic-assembly"
+      ]
+    },
+    {
+      "id": "L05",
+      "title": "AutoMate: Specialist and Generalist Assembly Policies over Diverse Geometries",
+      "year": 2024,
+      "publication": "RSS 2024",
+      "url": "https://www.roboticsproceedings.org/rss20/p064.pdf",
+      "checked_locations": [
+        "IV",
+        "V",
+        "VII",
+        "VIII"
+      ],
+      "read_scope": "primary_full_text_sections",
+      "applicability": "Two-part insertion policies; not evidence of threaded unfastening",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false
+    },
+    {
+      "id": "L06",
+      "title": "Nut Unfastening by Robotic Surface Exploration",
+      "year": 2021,
+      "publication": "Robotics 10(3), 107; doi:10.3390/robotics10030107",
+      "url": "https://pure-oai.bham.ac.uk/ws/files/159052372/robotics_10_00107.pdf",
+      "checked_locations": [
+        "4.3",
+        "Figure 9"
+      ],
+      "read_scope": "university_version_of_record_sections",
+      "applicability": "Real unfastening and axial probing; not a generated simulation asset",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false
+    },
+    {
+      "id": "L07",
+      "title": "Automated disassembly of e-waste—requirements on modeling of processes and product states",
+      "year": 2024,
+      "publication": "Frontiers in Robotics and AI 11:1303279",
+      "url": "https://www.frontiersin.org/journals/robotics-and-ai/articles/10.3389/frobt.2024.1303279/full",
+      "checked_locations": [
+        "2.4.1",
+        "Table 1"
+      ],
+      "read_scope": "publisher_full_text_sections",
+      "applicability": "Connection, tool, process and product-state representation",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false
+    },
+    {
+      "id": "L08",
+      "title": "End-to-End Autonomous Generation of Human Assembly Plans",
+      "year": 2026,
+      "publication": "arXiv:2610.09781v1; 2026-10-07 preprint",
+      "url": "https://arxiv.org/pdf/2610.09781",
+      "checked_locations": [
+        "Figure 1",
+        "3.1-3.5",
+        "5"
+      ],
+      "read_scope": "primary_full_text_sections",
+      "applicability": "Direct mesh/tool/MLLM/physics overlap; lacks modeled friction-held assembly and tested unfastening dynamics",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false,
+      "additional_urls": [
+        "https://arxiv.org/abs/2610.09781"
+      ]
+    },
+    {
+      "id": "L09",
+      "title": "Component Influence-Driven Fastener Reduction for Robotic Disassemblability-Aware Design Simplification",
+      "year": 2026,
+      "publication": "arXiv:2605.21026v1; 2026-05-20 preprint",
+      "url": "https://arxiv.org/html/2605.21026v1",
+      "checked_locations": [
+        "III-A Algorithm 1",
+        "Figure 1",
+        "V-B",
+        "V-C"
+      ],
+      "read_scope": "primary_full_text_sections",
+      "applicability": "CCC graph input with existing fastener labels; no dynamic robot simulation",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false
+    },
+    {
+      "id": "L10",
+      "title": "State-Based Disassembly Planning",
+      "year": 2025,
+      "publication": "AAAI 39(14):14602–14609; doi:10.1609/aaai.v39i14.33600",
+      "url": "https://ojs.aaai.org/index.php/AAAI/article/view/33600",
+      "checked_locations": [
+        "Official abstract and publication record"
+      ],
+      "read_scope": "official_abstract_only",
+      "applicability": "Planning reference only; no claim on thread or fastener semantics",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false
+    },
+    {
+      "id": "T01",
+      "title": "Shimano General Operations DM-GN0001-26",
+      "year": null,
+      "publication": "Manufacturer dealer manual, revision 26",
+      "url": "https://si.shimano.com/en/pdfs/dm/GN0001/DM-GN0001-26-ENG.pdf",
+      "checked_locations": [
+        "Printed pages 171-174; PDF indices 170-173"
+      ],
+      "read_scope": "manufacturer_pdf_sections",
+      "applicability": "Different front wheel retention types; model applicability to this bicycle unverified",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false
+    },
+    {
+      "id": "T02",
+      "title": "COMSOL 6.3 Screw Joint",
+      "year": null,
+      "publication": "Official multibody documentation",
+      "url": "https://doc.comsol.com/6.3/doc/com.comsol.help.mbd/mbd_ug_multibody.5.13.html",
+      "checked_locations": [
+        "Screw Joint",
+        "Thread Parameters"
+      ],
+      "read_scope": "official_documentation",
+      "applicability": "Helical relation concept; COMSOL not installed or used",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false
+    },
+    {
+      "id": "T03",
+      "title": "PhysX joints and rack-and-pinion",
+      "year": null,
+      "publication": "Official PhysX 5.4.0 and 5.5.1 documentation",
+      "url": "https://nvidia-omniverse.github.io/PhysX/physx/5.4.0/docs/Joints.html",
+      "checked_locations": [
+        "Joint Basics",
+        "Force Reporting",
+        "Breakage",
+        "PxRackAndPinionJoint API"
+      ],
+      "read_scope": "official_documentation",
+      "applicability": "SDK mechanism only; installed Isaac/Artisan path not runtime-tested",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false,
+      "additional_urls": [
+        "https://nvidia-omniverse.github.io/PhysX/physx/5.5.1/_api_build/classPxRackAndPinionJoint.html"
+      ]
+    },
+    {
+      "id": "T04",
+      "title": "OpenUSD UsdPhysicsJoint",
+      "year": null,
+      "publication": "Official API reference",
+      "url": "https://openusd.org/release/api/class_usd_physics_joint.html",
+      "checked_locations": [
+        "GetJointEnabledAttr",
+        "GetBreakTorqueAttr",
+        "GetBody0Rel",
+        "GetBody1Rel"
+      ],
+      "read_scope": "official_documentation",
+      "applicability": "Schema is not proof of live constraint release; breakage is not normal unthreading",
+      "retrieved_date": "2026-10-27",
+      "reproduced": false
+    }
+  ],
+  "local_evidence": [
+    {
+      "path": "scripts/blender/bicycle.py",
+      "sha256": "17d6f83d8bbf2cce46c67f2199a5edc3d570bec8e98f2e47fe6f7bbaf691ed2c",
+      "availability": "repository"
+    },
+    {
+      "path": "scripts/build_bicycle_asset.py",
+      "sha256": "cd1572cc58daa5ae487abf7af7f7f6d838b1504da030a46b210370435dd85869",
+      "availability": "repository"
+    },
+    {
+      "path": "scripts/blender/bicycle_exploded_study.py",
+      "sha256": "7fd5b9c475ab4b957ac3f197312a41bb5078199afecd7294da957f07a65e4949",
+      "availability": "repository"
+    },
+    {
+      "path": "src/roboenv_perception/construction/contracts.py",
+      "sha256": "682444fb58228b79198ddc0e7badac66a596d7640c95f481639efd8eb71efe23",
+      "availability": "repository"
+    },
+    {
+      "path": "src/roboenv_perception/harness/geometry.py",
+      "sha256": "1e7115e4377a6f02f7469c8dfea4c41afde1ebfcce1d58b5f34484bcf944cca4",
+      "availability": "repository"
+    },
+    {
+      "path": "src/roboenv_perception/harness/physics.py",
+      "sha256": "084fabeec34bf15cf0a6021874095fb066d31c85506d2bf126b9b3544502d944",
+      "availability": "repository"
+    },
+    {
+      "path": "outputs/bicycle-exploded-study-20261026/delivery/observations.json",
+      "sha256": "ee9f5cdcee8aad4228e3611aee1d5a2acd1f68905edbfa54ccddb4308b038cd2",
+      "availability": "local_only"
+    },
+    {
+      "path": "outputs/bicycle-exploded-study-20261026/delivery/parts.json",
+      "sha256": "d9e094510710200f066f621240d5732a0d72aac1b77f37b3e8c5c51ac2002ca8",
+      "availability": "local_only"
+    },
+    {
+      "path": "outputs/bicycle-exploded-study-20261026/delivery/evidence/E02.png",
+      "sha256": "883c9c7449bfd434de07a90566001892161b88199b50a60e6cde3e49f5fc73fe",
+      "availability": "local_only"
+    },
+    {
+      "path": "outputs/bicycle-exploded-study-20261026/delivery/evidence/E06.png",
+      "sha256": "f6315f7cc6ead5724dc21c6d8317cbfe88742a4c2e7721541f39741803231a0e",
+      "availability": "local_only"
+    }
+  ],
+  "artisan_snapshot": {
+    "root": "/home/felixz/real2sim/R2S2B/sources/Artisan",
+    "git_revision": null,
+    "revision_note": "Directory is not a Git checkout; key source file hashes recorded instead.",
+    "files": [
+      {
+        "path": "sdk/_core/v0/articulated_object.py",
+        "sha256": "052bcd314c4a7b4a9d7a24260a9cc8fd158322308a6f5b68d28724a8258504f8"
+      },
+      {
+        "path": "sdk/_core/v0/_coupling.py",
+        "sha256": "615e6ff82c2a495f7e3b217a41455184c15bd9362191fc9c3561405fa6f20651"
+      },
+      {
+        "path": "sdk/_core/v0/_usd_export.py",
+        "sha256": "81b8c646534b9a5e6ba4395cafe977e2ce8b7dae49007a3665babc97efdee856"
+      }
+    ]
+  },
+  "retrieval_limits": [
+    {
+      "url": "https://www.mdpi.com/2218-6581/10/3/107",
+      "result": "HTTP 429; L06 read via university publisher-version PDF"
+    },
+    {
+      "url": "https://si.shimano.com/en/pdfs/dm/GN0001/DM-GN0001-28-ENG.pdf",
+      "result": "Web tool content-size limit; revision 26 opened instead; not a claim that revision 26 is latest"
+    },
+    {
+      "url": "https://openaccess.thecvf.com/content/CVPR2022/html/Willis_JoinABLe_Learning_Bottom-Up_Assembly_of_Parametric_CAD_Joints_CVPR_2022_paper.html",
+      "result": "HTTP 403 on root retrieval; L01 primary text read via arXiv"
+    },
+    {
+      "url": "https://www.mdpi.com/2673-4052/7/1/20",
+      "title": "Digital Twin with Model Predictive Control for Screw Unfastening by Robots",
+      "result": "HTTP 429; search lead only, not used to establish technical claims"
+    },
+    {
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7537423/",
+      "title": "Benchmarking Protocols for Evaluating Small Parts Robotic Assembly Systems",
+      "result": "Browser challenge; not used as full-text evidence"
+    }
+  ]
+}

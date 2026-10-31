@@ -32,7 +32,15 @@ Declare an ideal fixed-ratio coupling only when a linked rotary interaction is r
 and supported by observed motion or a model-applicable source. Its signed ratio needs
 explicit provenance; if the ratio is unknown, leave couplings empty and flag the gap.
 Do not infer a chain, gear, freewheel or measured ratio solely from a bicycle-like shape.
+Uncoupled continuous joints need positive effort_limit and velocity_limit quantities for
+export (N*m and rad/s for rotary joints). Give explicit assumed provenance when unmeasured;
+these limits do not imply that a motor/controller has been implemented.
 Materials describe appearance, not measured friction, density or mass. No invented physics.
+For a fastening/disassembly task, keep fasteners, clamped members and mating nuts/supports
+as separate semantic parts. Hidden mates may be explicit world-knowledge hypotheses with
+alternatives; never label them observed. A fixed rest-pose joint is only a temporary rigid
+approximation and does not verify tightening, preload or removal. Visible fasteners require
+actual aligned passages and bearing faces in the geometry stage, not decorative screw heads.
 Use metres, Z-up, front=+Y in the object's local frame; scene placement is a separate stage.
 Reference evidence using exactly the supplied view ref_id, verified external source ID,
 or measurement identifier. An external source never counts as a human measurement.

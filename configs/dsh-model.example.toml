@@ -1,0 +1,11 @@
+# Copy to configs/local-dsh-model.toml and chmod 600. The local file is ignored.
+# DSH task reasoning only; do not use VLM_API_KEY here.
+base_url = ""
+model = ""
+# models = ["gpt-6.1-sol", "gpt-6-astra"] # optional alternatives on the same gateway
+api_protocol = "responses" # or "chat_completions", according to the gateway
+api_key = ""
+
+# Optional declared capacities; defaults are adapter assumptions, not discovery.
+# context_window = 131072
+# max_tokens = 8192

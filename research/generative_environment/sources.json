@@ -1,0 +1,346 @@
+{
+  "topic": "generative environment expansion for EnvCreator",
+  "date": "2026-10-28",
+  "timezone": "Asia/Shanghai",
+  "review_scope": "primary papers, official README/docs and selected source code; no model installation or generation",
+  "local_hardware": {
+    "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "memory_total_mib": 16376,
+    "source": "read-only nvidia-smi query"
+  },
+  "sources": [
+    {
+      "id": "hy_world2",
+      "title": "HY-World 2.0 official README",
+      "url": "https://raw.githubusercontent.com/Tencent-Hunyuan/HY-World-2.0/main/README.md",
+      "retrieved_at": "2026-10-28T03:57:08.943541+00:00",
+      "sha256": "e1bf03337177e389c2ba33f1b0724252007167eefd500844f65a57f6df56d1c1",
+      "evidence_use": "Release scope, generation/reconstruction split, public stages; product claims are not robot validation.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/hy_world2.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "hy2_paper",
+      "title": "HY-World 2.0 technical report",
+      "url": "https://arxiv.org/html/2604.14268",
+      "retrieved_at": "2026-10-28T03:58:09.597856+00:00",
+      "sha256": "b6a36d2659ba11bc86cac204662d552a473ad5a02bf2b0cd35ea4627bae6fdeb",
+      "evidence_use": "Panorama, trajectory, world expansion, reconstruction and GS-to-mesh methods.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/hy2_paper.html",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "hy2_worldgen",
+      "title": "HY-World 2.0 world generation guide",
+      "url": "https://raw.githubusercontent.com/Tencent-Hunyuan/HY-World-2.0/main/hyworld2/worldgen/README.md",
+      "retrieved_at": "2026-10-28T03:58:09.596405+00:00",
+      "sha256": "5ffdd3799caffa07a2a0a7ebac478d690f4068ea230c26330e3968aee2dbb75e",
+      "evidence_use": "Official deployment recommendation: >=4 GPUs, tested 8xH20; VLM service dependency.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/hy2_worldgen.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "hy2_panogen",
+      "title": "HY-Pano 2.0 guide",
+      "url": "https://raw.githubusercontent.com/Tencent-Hunyuan/HY-World-2.0/main/hyworld2/panogen/README.md",
+      "retrieved_at": "2026-10-28T03:58:09.596670+00:00",
+      "sha256": "2db1ea7f1853bf6a6c255f014fdc7b004a2a78e1c5b1f12c73ab1bf04c0f93c1",
+      "evidence_use": "Image generation backends differ from the existing EnvCreator Qwen VLM API.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/hy2_panogen.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "hy2_mesh_code",
+      "title": "HY-World 2.0 mesh extraction code",
+      "url": "https://raw.githubusercontent.com/Tencent-Hunyuan/HY-World-2.0/main/hyworld2/worldgen/gs/extract_mesh.py",
+      "retrieved_at": "2026-10-28T04:01:51.387700+00:00",
+      "sha256": "946e4c9b1f12363286b8a5d67cddef1cec1aedcf77c9d62c5c4a3351fa2b2a88",
+      "evidence_use": "Actual exported mesh extraction entry; TSDF and surface extraction, not CAD semantics.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/hy2_mesh_code.py",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "hy2_license_actual",
+      "title": "HY-World 2.0 Community License",
+      "url": "https://raw.githubusercontent.com/Tencent-Hunyuan/HY-World-2.0/main/License.txt",
+      "retrieved_at": "2026-10-28T04:01:51.388549+00:00",
+      "sha256": "26a9f951e4097f7f965a4c3f93357beb3605246ba3663bf541593de75a1ecbd0",
+      "evidence_use": "Separate license record; no blanket open-source/commercial entitlement claim.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/hy2_license_actual.txt",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "lyra",
+      "title": "Project Lyra README",
+      "url": "https://raw.githubusercontent.com/nv-tlabs/lyra/main/README.md",
+      "retrieved_at": "2026-10-28T03:57:08.946135+00:00",
+      "sha256": "b35dbd24bff1a73e12e360660c50e4c063338808db47d6bb744789c716bfe36b",
+      "evidence_use": "Current version and public code availability.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/lyra.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "lyra2_readme",
+      "title": "Lyra 2.0 README",
+      "url": "https://raw.githubusercontent.com/nv-tlabs/lyra/main/Lyra-2/README.md",
+      "retrieved_at": "2026-10-28T03:58:09.595954+00:00",
+      "sha256": "23161a49cc0439bb4a1c6880dcade135af2f837c038711a63d0b7651b60e43fc",
+      "evidence_use": "Inputs, GS pipeline, runtime on H100 80GB, model license.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/lyra2_readme.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "lyra2_install",
+      "title": "Lyra 2.0 install guide",
+      "url": "https://raw.githubusercontent.com/nv-tlabs/lyra/main/Lyra-2/INSTALL.md",
+      "retrieved_at": "2026-10-28T03:59:57.645023+00:00",
+      "sha256": "12ed2f8903ee5f80e090a4b086ed14b1e691d51c5fd077c0a7a5ea15024fc81e",
+      "evidence_use": "Tested H100 environment; no 16GB validation provided by this source.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/lyra2_install.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "lyra2_paper",
+      "title": "Lyra 2.0 paper",
+      "url": "https://arxiv.org/html/2604.13036",
+      "retrieved_at": "2026-10-28T03:58:09.598151+00:00",
+      "sha256": "eb8ee3216d8471b9c0aac7908112f3b65660c3afafe152369697e360527ababb",
+      "evidence_use": "Sections 4.4, 5.5 and 6: mesh extraction, Isaac demo, static scenes and photometric limitations.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/lyra2_paper.html",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "vistadream",
+      "title": "VistaDream official README",
+      "url": "https://raw.githubusercontent.com/WHU-USI3DV/VistaDream/main/README.md",
+      "retrieved_at": "2026-10-28T03:58:09.597062+00:00",
+      "sha256": "83b2f2ac0608422b3eff4469a0c8a6ddb91e6eb79414882f4b05816f4c00e49c",
+      "evidence_use": "Multiview consistency sampling, sparse-view input and RTX4090 test environment.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/vistadream.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "vista_paper",
+      "title": "VistaDream paper",
+      "url": "https://arxiv.org/html/2410.16892",
+      "retrieved_at": "2026-10-28T03:59:57.645490+00:00",
+      "sha256": "ffe558aa0747611d7138d6b37fe6844197f0058f5acf7e24531d852fae67cdb7",
+      "evidence_use": "Appendix A.5: nearby-object distortion from monocular depth errors.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/vista_paper.html",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "wonderworld",
+      "title": "WonderWorld official README",
+      "url": "https://raw.githubusercontent.com/KovenYu/WonderWorld/main/README.md",
+      "retrieved_at": "2026-10-28T03:57:08.944753+00:00",
+      "sha256": "a49854e2956da01035680ec23cf8b319d9d8cd43f690899553e6c6e928dfc0ad",
+      "evidence_use": "Incremental generation workflow and 48GB requirement.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/wonderworld.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "wonder_paper",
+      "title": "WonderWorld paper",
+      "url": "https://arxiv.org/html/2406.09394",
+      "retrieved_at": "2026-10-28T03:59:57.645644+00:00",
+      "sha256": "cfe0491a9f8571a3738a773b74f995b2e4de4d144815096b9c44c9bf17fa35b1",
+      "evidence_use": "Limitations: front-facing surfaces, missing backsides, holes and floaters.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/wonder_paper.html",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "worldgen",
+      "title": "WorldGen README",
+      "url": "https://raw.githubusercontent.com/ZiYang-xie/WorldGen/main/README.md",
+      "retrieved_at": "2026-10-28T03:57:08.945440+00:00",
+      "sha256": "97b8e2ee6f9616fe5572c38d5e5f5b8c1d9fcca9d580d09724348f20d0e67ab4",
+      "evidence_use": "Low-VRAM mode, mesh export, unfinished technical report and background-completion tasks; engineering evidence.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/worldgen.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "worldgen_code",
+      "title": "WorldGen implementation",
+      "url": "https://raw.githubusercontent.com/ZiYang-xie/WorldGen/main/src/worldgen/worldgen.py",
+      "retrieved_at": "2026-10-28T04:01:51.388255+00:00",
+      "sha256": "cf55a052fc45dd577b125bce0d324a83daf2e522ec9bc4b38a711c4932b65948",
+      "evidence_use": "Panorama + depth base representation, mesh/GS branches, optional background inpainting.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/worldgen_code.py",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "marble_docs",
+      "title": "Marble official overview",
+      "url": "https://docs.worldlabs.ai/",
+      "retrieved_at": "2026-10-28T03:57:08.945971+00:00",
+      "sha256": "06b5a27237eb8c193359a2bba4782c11cbcc3d358a259ac9d2db707fd1f0fa63",
+      "evidence_use": "Supported input forms and service scope, not locally tested.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/marble_docs.html",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "marble_mesh",
+      "title": "Marble mesh export guide",
+      "url": "https://docs.worldlabs.ai/marble/export/mesh.md",
+      "retrieved_at": "2026-10-28T03:59:57.642429+00:00",
+      "sha256": "583c67ec54e25c181a182ab940906c993c3b7b72d481b1014a153908fd855d04",
+      "evidence_use": "Distinct collider/visual meshes and documented geometry artifacts.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/marble_mesh.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "marble_specs",
+      "title": "Marble export specifications",
+      "url": "https://docs.worldlabs.ai/marble/export/specs.md",
+      "retrieved_at": "2026-10-28T03:59:57.643036+00:00",
+      "sha256": "ceca9de460a8f3a3d5d0bfc9db3ead185ec48ddb75a01323cabaa8298fcfe5ef",
+      "evidence_use": "Available GS and mesh file types, not interchangeable with USD.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/marble_specs.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "marble_expand",
+      "title": "Marble expansion guide",
+      "url": "https://docs.worldlabs.ai/marble/create/prompt-guides/expand.md",
+      "retrieved_at": "2026-10-28T03:59:57.643446+00:00",
+      "sha256": "bc93f73d6752d6a1e9a6880b1ecb940842c3ed1d8e0b4da91d4ea630be9b13b8",
+      "evidence_use": "Model-specific support and directional expansion limitations.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/marble_expand.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "marble_video",
+      "title": "Marble video input guide",
+      "url": "https://docs.worldlabs.ai/marble/create/prompt-guides/video-prompt.md",
+      "retrieved_at": "2026-10-28T03:59:57.643881+00:00",
+      "sha256": "55fd98537868e1d85bddea5b63bd5b214f6407d6729b6a145b2a7f423e4d9dee",
+      "evidence_use": "Static capture, angular coverage, focal length and exposure conditions.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/marble_video.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "marble_image",
+      "title": "Marble image input guide",
+      "url": "https://docs.worldlabs.ai/marble/create/prompt-guides/image-prompt.md",
+      "retrieved_at": "2026-10-28T03:59:57.644332+00:00",
+      "sha256": "5405ad3b44a74754706c18584e95f541a1ea10c427be363596b699a44f83f215",
+      "evidence_use": "Spatial-context requirements and close-up limitations.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/marble_image.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "gen3c",
+      "title": "GEN3C official README",
+      "url": "https://raw.githubusercontent.com/nv-tlabs/Gen3C/main/README.md",
+      "retrieved_at": "2026-10-28T03:57:10.291776+00:00",
+      "sha256": "a8f2951a23aefdbc22ea7c1e3778eba9de99da68a1b8ffaac76415584a569d21",
+      "evidence_use": "3D-cache video synthesis; upstream full-offload memory observation ~43GB.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/gen3c.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "hy_voyager",
+      "title": "HunyuanWorld-Voyager README",
+      "url": "https://raw.githubusercontent.com/Tencent-Hunyuan/HunyuanWorld-Voyager/main/README.md",
+      "retrieved_at": "2026-10-28T03:57:08.944067+00:00",
+      "sha256": "a03a6f996bc54850c8e34cff0f9d05890024d4c05c3775465fe4b2b4a51d91cd",
+      "evidence_use": "RGB-D video/point-cloud path and official 60GB requirement at 540p.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/hy_voyager.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "infinigen",
+      "title": "Infinigen README",
+      "url": "https://raw.githubusercontent.com/princeton-vl/infinigen/main/README.md",
+      "retrieved_at": "2026-10-28T03:58:11.152272+00:00",
+      "sha256": "ff6802bfdbd3ce2f95d34480ade6cf98fa173b7383db1ce1b10ee93df6ff2bc8",
+      "evidence_use": "Procedural structured environments, distinct from image-faithful reconstruction.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/infinigen.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "infinigen_sim_actual",
+      "title": "Infinigen whole-scene simulator export guide",
+      "url": "https://raw.githubusercontent.com/princeton-vl/infinigen/main/docs/source/ExportingToSimulators.md",
+      "retrieved_at": "2026-10-28T04:01:51.388973+00:00",
+      "sha256": "4bfd4bcea2580fe620bf4c9534483e0c8579ad64f8d3d32e4c8094f2a27f4304",
+      "evidence_use": "Whole-scene USD without articulations, tested indoor Isaac scope; distinct articulated branch.",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/infinigen_sim_actual.md",
+      "execution": "source_read_only; model and simulator not run"
+    },
+    {
+      "id": "sd15_inpainting",
+      "title": "Stable Diffusion v1.5 Inpainting model card",
+      "url": "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting/raw/main/README.md",
+      "retrieved_at": "2026-10-28T04:13:19.011354+00:00",
+      "sha256": "6f5758cfeabddb509b09399d6f0879056c5fd0002d7d9849bc183a6de9a98ab0",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/sd15_inpainting.md",
+      "execution": "source_read_only; model not installed or run",
+      "evidence_use": "Maintained model-card mirror, explicitly unaffiliated with original RunwayML; Diffusers image/mask API and 512x512 training resolution; proposed 2D background outpainting baseline, not installed or run."
+    },
+    {
+      "id": "diffusers_memory",
+      "title": "Diffusers inference memory optimization",
+      "url": "https://raw.githubusercontent.com/huggingface/diffusers/main/docs/source/en/optimization/memory.md",
+      "retrieved_at": "2026-10-28T04:13:20.486058+00:00",
+      "sha256": "fb390aac843bb8b53273f9584832b69299cacc7a805d07552598c017e7d1bae6",
+      "local_cache": "outputs/generative-environment-research-20261028-v1/sources/diffusers_memory.md",
+      "execution": "source_read_only; model not installed or run",
+      "evidence_use": "Official half-precision and CPU offload mechanisms; no claim of measured local VRAM or performance."
+    }
+  ],
+  "upstream_tree_snapshots": [
+    {
+      "id": "hy2_tree",
+      "url": "https://api.github.com/repos/Tencent-Hunyuan/HY-World-2.0/git/trees/main?recursive=1",
+      "retrieved_at": "2026-10-28T04:00:55.953869+00:00",
+      "tree_sha": "df9988efb87bfc0f4947eb3889411cf957478b06",
+      "truncated": false,
+      "sha256": "d7f2f173f766dd4f5166c044daf66f1b8de9eef724eb154f6b87c727b29c65fc"
+    },
+    {
+      "id": "lyra_tree",
+      "url": "https://api.github.com/repos/nv-tlabs/lyra/git/trees/main?recursive=1",
+      "retrieved_at": "2026-10-28T04:00:55.954343+00:00",
+      "tree_sha": "9fffc9adc37004091ecf26ef03abfb3abdf4d59a",
+      "truncated": false,
+      "sha256": "ceffd98ea2c859e9c4d5b4c4ee8a6c873ff73105f9c1c7bb6f4f9c340ece3f26"
+    },
+    {
+      "id": "worldgen_tree",
+      "url": "https://api.github.com/repos/ZiYang-xie/WorldGen/git/trees/main?recursive=1",
+      "retrieved_at": "2026-10-28T04:00:55.954627+00:00",
+      "tree_sha": "7ce7b2767fdf31e2727b69a2e61e2e950e3a017f",
+      "truncated": false,
+      "sha256": "6411971841f39b20c4e9ef27cccee818c163736a00892930539382e804477293"
+    },
+    {
+      "id": "infinigen_tree",
+      "url": "https://api.github.com/repos/princeton-vl/infinigen/git/trees/main?recursive=1",
+      "retrieved_at": "2026-10-28T04:00:55.955052+00:00",
+      "tree_sha": "224598d4a2ff95b4fc928e72c222598b7122c698",
+      "truncated": false,
+      "sha256": "10d79cd0076c5f4e7c5f6fb4f2ef7d7c60cf4674f3727268d3890150434ff7fb"
+    }
+  ],
+  "fetch_failures": [
+    {
+      "id": "infinigen_sim",
+      "url": "https://raw.githubusercontent.com/princeton-vl/infinigen/main/docs/simulation/ExportingToSimulators.md",
+      "error": "HTTPError: HTTP Error 404: Not Found"
+    },
+    {
+      "id": "hy2_license",
+      "url": "https://raw.githubusercontent.com/Tencent-Hunyuan/HY-World-2.0/main/LICENSE",
+      "error": "HTTPError: HTTP Error 404: Not Found"
+    }
+  ],
+  "limitations": [
+    "No original-room hidden-region truth available.",
+    "No model reproduced on this host.",
+    "Upstream mutable main branches are bound by retrieved-content hashes.",
+    "Web search pages were not evidence for capability conclusions."
+  ],
+  "current_project_scope": "Optional local 2D background appearance completion; no new room mesh, collision, depth-estimation or mandatory GS training. Documentation planning only."
+}

@@ -20,6 +20,8 @@ Only horizontal rigid push/contact (rigid), passive hinge opening (hinge), rotar
 axis response (rotary), and IDEAL fixed-ratio coupling (coupled) have protocols.
 Grasping, lifting, riding, braking, robot tasks, real mechanical design, load-bearing,
 balance and locomotion are unsupported. Never replace these goals with generic push tests.
+Fastening, preload, screw removal, disassembly and assembly load transfer also remain
+unsupported by these generic protocols. An assembly geometry audit is not a dynamics test.
 Each requirement needs asset_id (null for scene), family (null if unsupported),
 supporting_tests (exact supplied test_ref strings), reason, and status.
 covered requires a passed test on that asset in the same family. Missing/not-run evidence
@@ -56,8 +58,9 @@ class ScopeReview(BaseModel):
 # These goals cannot become supported by a model relabelling a generic protocol.
 UNSUPPORTED = re.compile(
     r"\b(grasp\w*|pick[ -]?up|lift\w*|rid(?:e|es|ing)|cycl\w*|brak\w*|"
-    r"robot\w*|mechanical design|real mechanism|locomotion|balance|load[ -]bearing)\b"
-    r"|抓取|拿起|拾取|抬起|举起|骑行|骑车|骑乘|制动|刹车|机器人|真实机械|机械设计",
+    r"robot\w*|mechanical design|real mechanism|locomotion|balance|load[ -]bearing|"
+    r"fasten\w*|unfasten\w*|disassembl\w*|preload|screw removal)\b"
+    r"|抓取|拿起|拾取|抬起|举起|骑行|骑车|骑乘|制动|刹车|机器人|真实机械|机械设计|紧固|预紧|拆卸|拆装",
     re.IGNORECASE,
 )
 

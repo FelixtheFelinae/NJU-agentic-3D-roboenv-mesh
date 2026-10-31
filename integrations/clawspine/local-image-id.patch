@@ -1,0 +1,143 @@
+diff --git a/docs/guides/getting-started.md b/docs/guides/getting-started.md
+index 467b846..749b665 100644
+--- a/docs/guides/getting-started.md
++++ b/docs/guides/getting-started.md
+@@ -83,6 +83,12 @@ accepts a body-height target. The launcher prints its actual model/controller
+ configuration and creates one native session. Keep the terminal running; Ctrl-C
+ stops this launch's owned services.
+ 
++For a new local build of the documented Arena runtime, pass its exact local
++image ID with `--arena-image-id sha256:...`. Tags are not accepted. The launcher
++checks the ID before launch and records the selected image in `run.json`;
++this identifies the deployment without transferring validation from a previous
++machine or image. Omitting the option preserves the original image binding.
++
+ The native workspace includes an optional [basic policy library](../../basic-skills/README.md).
+ `list_basic_skills` reports SONIC / π0.5 interfaces and their actual backend availability.
+ Select a SONIC deployment with `--controller sonic --sonic-model-dir DEPLOY_DIRECTORY`;
+diff --git a/docs/guides/getting-started.zh-CN.md b/docs/guides/getting-started.zh-CN.md
+index 4d42269..84bfb20 100644
+--- a/docs/guides/getting-started.zh-CN.md
++++ b/docs/guides/getting-started.zh-CN.md
+@@ -60,6 +60,10 @@ ACCEPT_EULA=Y CLAWSPINE_DOCKER_SUDO=1 node scripts/launch_dsh_rsi.mjs
+ 
+ 先使用终端给出的**首次认证链接**，之后可收藏 `http://127.0.0.1:8889/`。认证后的根页面自动发现机器人并显示默认会话与 Dashboard；手工选择的会话/布局会保留。新的隔离部署可能需要新的首次认证链接，无需再创建一个机器人账号。
+ 
++对按构建文档准备的新本地 Arena 镜像，可用 `--arena-image-id sha256:...` 指定完整镜像 ID。
++启动器不接受可变 tag，会在启动前核对 ID 并把实际选择写入 `run.json`。
++这只标识当前部署，不沿用旧机器或旧镜像的验证结论；省略参数时保留原有镜像绑定。
++
+ ## 模型与凭据
+ 
+ 服务配置从调用者的 `DSH_HOME`（默认 `~/.dsh`）继承。通过 DSH 选择实际可用模型。启动器默认路由始终明确，继承凭据不会偷偷更换模型；当前版本参数以 `--help` 为准。
+diff --git a/scripts/launch_dsh_sim.mjs b/scripts/launch_dsh_sim.mjs
+index 97f0dc0..e547ae0 100644
+--- a/scripts/launch_dsh_sim.mjs
++++ b/scripts/launch_dsh_sim.mjs
+@@ -81,6 +81,7 @@ const usage = `Usage: ACCEPT_EULA=Y CLAWSPINE_DOCKER_SUDO=1 node scripts/launch_
+   [--dsh-credential-env ENV_NAME] (repeatable; names only, DSH child only)
+   [--gpu DEVICE_OR_UUID] [--render-gpu INDEX]
+   [--runtime-backend docker|process] [--isaac-python EXECUTABLE]
++  [--arena-image-id sha256:LOCAL_BUILT_IMAGE_ID]
+   [--camera-config RIG_JSON]
+   [--navigation-config CONTROLLER_JSON]
+   [--controller homie_v2|sonic] [--sonic-model-dir DEPLOY_DIRECTORY]
+@@ -112,12 +113,18 @@ Only provider settings are seeded; native credentials are shared, sessions/Web a
+ --provider-dsh-home selects another source; --no-inherit-providers disables home inheritance.
+ `;
+ 
++export function resolveDeploymentImages(cfg = {}) {
++  if (cfg.arenaImageId && (cfg.runtimeBackend !== 'docker' || !/^sha256:[0-9a-f]{64}$/.test(cfg.arenaImageId))) throw new Error('--arena-image-id requires an exact local SHA-256 image ID and the Docker backend');
++  return Object.freeze({ ...images, arena: cfg.arenaImageId ?? images.arena });
++}
++
+ export function parseSimOptions(argv) {
+   const cfg = { port: 8889, backendPort: 28561, policyPort: 28557, seed: 42, gpuWaitSeconds: 900, skipBuild: false, prepareOnly: false, controlMode: 'vla', agentMode: 'legacy', webAccess: 'local', trustedHosts: [], browserOpen: 'auto', gpu: '0', runtimeBackend: 'docker', isaacPython: '/isaac-sim/python.sh', controller: 'homie_v2' };
+   const values = { '--scene-usd': 'sceneUsd', '--scene-config': 'sceneConfig', '--scene-id': 'sceneId', '--spawn': 'spawn', '--observer-eye': 'observerEye', '--observer-target': 'observerTarget', '--run-dir': 'runDir', '--port': 'port', '--backend-port': 'backendPort', '--policy-port': 'policyPort', '--seed': 'seed', '--gpu-wait-seconds': 'gpuWaitSeconds', '--control-mode': 'controlMode', '--subscription-dsh-home': 'subscriptionDshHome', '--whole-body-config': 'wholeBodyConfig', '--agent-mode': 'agentMode', '--robot-workspace': 'robotWorkspace', '--resume-dsh-home': 'resumeDshHome', '--resume-session-id': 'resumeSessionId', '--web-access': 'webAccess' };
+   Object.assign(values, { '--model-provider': 'modelProvider', '--model': 'model', '--model-base-url': 'modelBaseURL', '--reasoning-effort': 'reasoningEffort', '--gpu': 'gpu', '--render-gpu': 'renderGpu', '--runtime-backend': 'runtimeBackend', '--isaac-python': 'isaacPython', '--camera-config': 'cameraConfig' });
+   Object.assign(values, { '--controller': 'controller', '--sonic-model-dir': 'sonicModelDir', '--pi05-endpoint': 'pi05Endpoint' });
+   Object.assign(values, { '--navigation-config': 'navigationConfig' });
++  Object.assign(values, { '--arena-image-id': 'arenaImageId' });
+   Object.assign(values, { '--native-extra-patch': 'nativeExtraPatch', '--instructions-file': 'instructionsFile' });
+   const seen = new Set();
+   for (let i = 0; i < argv.length; i++) {
+@@ -167,6 +174,7 @@ export function parseSimOptions(argv) {
+   }
+   if (!/^(?:\d+|GPU-[a-zA-Z0-9-]+)$/.test(cfg.gpu)) throw new Error('Select one GPU index or UUID');
+   if (!['docker', 'process'].includes(cfg.runtimeBackend)) throw new Error('Unknown simulation runtime backend');
++  resolveDeploymentImages(cfg);
+   if (cfg.runtimeBackend === 'process' && cfg.controlMode !== 'whole_body') throw new Error('Process runtime currently implements the native no-VLA deployment');
+   if (cfg.runtimeBackend === 'process' && cfg.renderGpu === undefined) throw new Error('Process runtime needs explicit --render-gpu; CUDA visibility alone does not isolate Vulkan');
+   if (cfg.renderGpu !== undefined && !/^\d+$/.test(cfg.renderGpu)) throw new Error('Render GPU must be a Vulkan device index');
+@@ -304,6 +312,7 @@ export function unifiedSkillsReady(telemetry, directory, robotId, controlMode =
+ }
+ 
+ export async function launchSim(cfg, hooks = {}) {
++  const deploymentImages = resolveDeploymentImages(cfg);
+   const direct = cfg.controlMode === 'whole_body';
+   const native = cfg.agentMode === 'native';
+   const selection = native ? nativeModelSelection(cfg) : undefined;
+@@ -324,7 +333,7 @@ export async function launchSim(cfg, hooks = {}) {
+   for (const folder of ['state', 'snapshot', 'physical', 'actor-auth', 'admin-auth']) mkdirSync(join(runDir, folder), { recursive: true, mode: 0o700 });
+   const actorTokenFile = join(runDir, 'actor-auth', 'actor.token'), adminTokenFile = join(runDir, 'admin-auth', 'admin.token');
+   const actorToken = createBackendToken(actorTokenFile); createBackendToken(adminTokenFile);
+-  let state = { schema: 'clawspine.unified-sim-launch.v1', runId, robotId, runDir, startedAt: new Date().toISOString(), stage: 'preparing', dshVersion: '0.2.1-alpha.1', model: 'deepseek-flash', images,
++  let state = { schema: 'clawspine.unified-sim-launch.v1', runId, robotId, runDir, startedAt: new Date().toISOString(), stage: 'preparing', dshVersion: '0.2.1-alpha.1', model: 'deepseek-flash', images: deploymentImages,
+     scene: { id: cfg.sceneId, source: sceneUsd, sourceKind: cfg.sceneConfig ? 'scene-configuration' : 'usd', sha256: createHash('sha256').update(readFileSync(sceneUsd)).digest('hex'), spawn: cfg.spawn, seed: cfg.seed, observerEye: cfg.observerEye, observerTarget: cfg.observerTarget },
+     physicsDevice: 'cpu', renderingDevice: 'gpu', controlMode: direct ? 'whole_body' : 'vla', controller: cfg.controller ?? 'homie_v2', policy: direct ? 'upper-joint-position-plus-' + (cfg.controller ?? 'homie_v2') : 'unchanged-GR00T-N1.6-G1-Loco-zero-shot', taskJudgeLocation: 'outer-orchestrator', benchmarkAccepted: false,
+     backendPort: cfg.backendPort, policyPort: cfg.policyPort, actorTokenFile, adminTokenFile, agentMode: native ? 'native' : 'legacy', workspace, nativeDefaultSessionId, webNetwork,
+@@ -539,7 +548,7 @@ export async function launchSim(cfg, hooks = {}) {
+       }
+       writePrivateJson(deploymentPath, deployment);
+     }
+-    if (!processBackend) for (const value of direct ? [images.arena] : Object.values(images)) if ((await docker(['image', 'inspect', '--format', '{{.Id}}', value])).trim() !== value) throw new Error('Pinned Docker image mismatch');
++    if (!processBackend) for (const value of direct ? [deploymentImages.arena] : Object.values(deploymentImages)) if ((await docker(['image', 'inspect', '--format', '{{.Id}}', value])).trim() !== value) throw new Error('Pinned Docker image mismatch');
+     save({ gpuIdentity: (await command('nvidia-smi', ['-i', cfg.gpu ?? '0', '--query-gpu=index,uuid,pci.bus_id,name,driver_version', '--format=csv,noheader'])).trim() });
+     const vla = join(playground, 'tools/vla_isaac');
+     snapshotUnifiedBody(vla, join(runDir, 'snapshot'));
+@@ -564,7 +573,7 @@ export async function launchSim(cfg, hooks = {}) {
+     if (!direct) {
+     const modelDir = realpathSync(process.env.CLAWSPINE_GROOT_MODEL_DIR || join(homedir(), '.cache/clawspine/vla/models/groot-n1.6-g1-loco'));
+     await verifyModel(modelDir); await capacity(24000);
+-    policy = await container('policy', images.policy, [...mount(modelDir, '/models/isaaclab_arena/locomanipulation_tutorial/checkpoint-20000'), '--env', 'HF_HUB_OFFLINE=1', '--env', 'TRANSFORMERS_OFFLINE=1'],
++    policy = await container('policy', deploymentImages.policy, [...mount(modelDir, '/models/isaaclab_arena/locomanipulation_tutorial/checkpoint-20000'), '--env', 'HF_HUB_OFFLINE=1', '--env', 'TRANSFORMERS_OFFLINE=1'],
+       ['-m', 'isaaclab_arena.remote_policy.remote_policy_server_runner', '--host', '127.0.0.1', '--port', String(cfg.policyPort), '--policy_type', 'isaaclab_arena_gr00t.policy.gr00t_remote_policy.Gr00tRemoteServerSidePolicy', '--policy_config_yaml_path', 'isaaclab_arena_gr00t/policy/config/g1_locomanip_gr00t_closedloop_config.yaml', '--policy_device', 'cuda']);
+     save({ stage: 'policy-loading' });
+     const nativeProbe = "import sys,zmq\nfrom isaaclab_arena.remote_policy.message_serializer import MessageSerializer\nc=zmq.Context();s=c.socket(zmq.REQ);s.setsockopt(zmq.LINGER,0);s.setsockopt(zmq.RCVTIMEO,1500);s.setsockopt(zmq.SNDTIMEO,1500);s.connect('tcp://127.0.0.1:'+sys.argv[1]);s.send(MessageSerializer.to_bytes({'endpoint':'get_init_info','data':{'requested_action_mode':'chunk'}}));r=MessageSerializer.from_bytes(s.recv());assert r.get('status')=='success' and r.get('config',{}).get('action_dim')==50;s.close();c.term();print('native50Dready')";
+@@ -579,7 +588,7 @@ export async function launchSim(cfg, hooks = {}) {
+     const role = bodyGeneration === 0 ? 'body' : 'body-r' + bodyGeneration;
+     body = runId + '-' + role;
+     bodyTracker.attempted(body, bodyRunId);
+-    return container(role, images.arena, [...mount(sceneRoot, '/scene'), ...mount(join(runDir, 'snapshot/docker'), '/probe'), ...mount(join(runDir, 'snapshot/vla_isaac'), '/modules/vla_isaac'),
++    return container(role, deploymentImages.arena, [...mount(sceneRoot, '/scene'), ...mount(join(runDir, 'snapshot/docker'), '/probe'), ...mount(join(runDir, 'snapshot/vla_isaac'), '/modules/vla_isaac'),
+       ...(native ? mount(workspace, '/agent-workspace', false) : []),
+       ...(nativeSettings ? mount(nativeSettings.directory, '/runtime-settings') : []),
+       ...(cfg.controller === 'sonic' ? mount(realpathSync(cfg.sonicModelDir), '/sonic-models') : []),
+diff --git a/test/unified-sim-launcher.test.mjs b/test/unified-sim-launcher.test.mjs
+index 5cace0c..b9a9704 100644
+--- a/test/unified-sim-launcher.test.mjs
++++ b/test/unified-sim-launcher.test.mjs
+@@ -3,7 +3,7 @@ import { test } from 'node:test';
+ import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+-import { makeUnifiedPatch, parseSimOptions, unifiedSkillsReady, unifiedBodyFiles, snapshotUnifiedBody, snapshotNativeInput } from '../scripts/launch_dsh_sim.mjs';
++import { makeUnifiedPatch, parseSimOptions, resolveDeploymentImages, unifiedSkillsReady, unifiedBodyFiles, snapshotUnifiedBody, snapshotNativeInput } from '../scripts/launch_dsh_sim.mjs';
+ import { processInvocation } from '../scripts/rsi/process-runtime.mjs';
+ 
+ const args = ['--scene-usd', '/tmp/fixture/scene.usd', '--scene-id', 'arbitrary-room', '--spawn', '1,-1,0,1.5', '--observer-eye', '2,-4,2', '--observer-target', '2,0,1'];
+@@ -20,6 +20,14 @@ test('scene/spawn/camera and port validation rejects malformed frames', () => {
+   assert.throws(() => parseSimOptions([...args, '--seed', '-1']));
+   assert.throws(() => parseSimOptions([...args, '--gpu-wait-seconds', '901']));
+ });
++test('an explicitly built Arena image reaches the deployment binding by immutable identity', () => {
++  const id = 'sha256:' + 'b'.repeat(64);
++  const cfg = parseSimOptions([...args, '--arena-image-id', id]);
++  assert.equal(resolveDeploymentImages(cfg).arena, id);
++  assert.equal(resolveDeploymentImages(cfg).policy, resolveDeploymentImages().policy);
++  assert.throws(() => parseSimOptions([...args, '--arena-image-id', 'unverified:latest']));
++  assert.throws(() => resolveDeploymentImages({ runtimeBackend: 'process', arenaImageId: id }));
++});
+ test('profile uses shared existing HRs and actor credential only, not a private scene judge', () => {
+   const patch = makeUnifiedPatch({ runDir: '/tmp/private-run', actorTokenFile: '/tmp/private-run/actor-auth/actor.token', backendPort: 28561, modelProfile: '# model route from existing profile' });
+   assert.ok(patch.includes('@clawspine/platform-g1-arena-dsh/unified'));

@@ -1,4 +1,9 @@
-# NJU-agentic-3D-roboenv-mesh
+# EnvCreator
+
+EnvCreator 是当前视觉重建与交互资产生成框架的暂定名称，仓库名及 Python 模块名保持兼容。
+ClawSpine 的原生机器人能力通过独立适配层接入，见 [接入方式与实际验证](docs/ENVCREATOR_CLAWSPINE.md)。
+当前各入口、模型边界和已接通范围见 [仓库工作流树状图](docs/WORKFLOW_OVERVIEW.md)。
+可选的本地背景扩图入口为 `envcreator background`，沿用现有素材与 mask，生成外观图片；安装、固定相机加载及范围见 [本地背景扩图](docs/LOCAL_BACKGROUND.md)。
 
 A trial in NJU-@SOARLAB
 
@@ -24,6 +29,16 @@ DATA is All you Need！
 ```
 
 配置、实际入口、运行命令和验证记录见 [Agentic Harness](docs/AGENTIC_HARNESS.md)。
+`envcreator generate` 复用同一生成入口；`envcreator handoff` 打包 USD 场景，
+`envcreator clawspine` 调用外部 ClawSpine 的原生 G1 启动器。当前先复用机器人运行能力，
+RoboHelix 的进化调度暂不接入。
+`envcreator tool electric-screwdriver` 复用 Blender/Artisan 生成直柄电动螺丝刀，
+收集官方参考并保留建模假设，带抓持/TCP 坐标和独立主轴速度驱动；传入 `--isaac-python` 后执行功能验证。
+`envcreator tool-test` 可验证已有工具：理想导轨对准、六角啮合、旋松及偏心/倾斜/间隙/错规格/停机对照。
+已有工具通过理想台架的 32 项检查，旋转约 5 圈、退出约 4.10 mm；G1 抓取与对准场景已打包，机器人实验尚未运行。
+后续 Agent 工具流程沿用原生 DSH：`envcreator dsh-tool-profile` 生成插件配置，通过 ClawSpine 既有的
+`--native-extra-patch` 加载；资料、生成、验证和交付工具均保存调用前后记录，不另建模型循环。
+生成命令、物理实验和修复记录见 [电动螺丝刀试制](experiments/electric_screwdriver/README.md)。
 通用 worker 已在真实 Isaac 中验证刚体推碰、被动铰链和理想固定比传动；
 完整图片重建的交付仍逐次接受视觉与物理审查，失败或证据不足保留 `unverified`。
 当前视觉复审已出现误判；`verified` 表示程序门禁通过，仍需结合实际渲染和实验范围判断。

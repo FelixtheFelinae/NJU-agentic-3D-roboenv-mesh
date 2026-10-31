@@ -135,7 +135,8 @@ def run(output):
         bpy.context.collection.objects.link(camera)
         scene.camera = camera
         data.type, data.ortho_scale = "ORTHO", span * 1.4
-        for name, offset in [("preview", (0.7, -1, 1.25)), ("top", (0, 0, 2)),
+        for name, offset in [("preview", (0.7, -1, 1.25)), ("front", (0, -2, 0)),
+                             ("top", (0, 0, 2)),
                              ("underside", (0.6, -1, -1.2))]:
             camera.location = center + Vector(offset) * span
             camera.rotation_euler = (center - camera.location).to_track_quat("-Z", "Y").to_euler()

@@ -21,6 +21,7 @@ server = ["av>=14", "scipy>=1.13"]
 
 [project.scripts]
 scene-perception = "roboenv_perception.cli:main"
+scene-harness = "roboenv_perception.harness.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

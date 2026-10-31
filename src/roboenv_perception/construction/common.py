@@ -87,7 +87,7 @@ def read_mask(path: Path, size=None):
 
 
 def perception_frames(root: Path, scene: dict):
-    if scene.get("kind") == "video":
+    if scene.get("kind") in {"video", "image_set"}:
         return scene["frames"]
     return [
         {

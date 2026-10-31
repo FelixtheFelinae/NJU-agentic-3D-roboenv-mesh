@@ -139,7 +139,7 @@ class Part(Contract):
 
 
 class Joint(Contract):
-    name: str
+    name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
     parent: str
     child: str
     type: Literal["fixed", "revolute", "prismatic", "continuous"]
@@ -169,6 +169,25 @@ class Joint(Contract):
         return self
 
 
+class Coupling(Contract):
+    """Declared ideal kinematic relation; not evidence of a physical chain or gear."""
+
+    driver_joint: str
+    driven_joint: str
+    mechanism: Literal["ideal_fixed_ratio"] = "ideal_fixed_ratio"
+    ratio: Quantity
+    evidence_kind: Literal["observed", "inferred", "assumed"]
+    evidence_refs: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def legal_ratio(self):
+        if self.driver_joint == self.driven_joint:
+            raise ValueError("coupling must connect two distinct joints")
+        if self.ratio.value is None or not math.isfinite(self.ratio.value) or self.ratio.value == 0:
+            raise ValueError("coupling needs a finite nonzero signed ratio")
+        return self
+
+
 class Blueprint(Contract):
     schema_version: Literal["roboenv.construction.v1"] = VERSION
     object_id: str
@@ -177,6 +196,7 @@ class Blueprint(Contract):
     target_dimensions_m: Dimensions = Field(default_factory=Dimensions)
     parts: list[Part] = Field(min_length=1)
     joints: list[Joint] = Field(default_factory=list)
+    couplings: list[Coupling] = Field(default_factory=list)
     acceptance: list[str] = Field(min_length=1)
     assumptions: list[str] = Field(default_factory=list)
     unresolved: list[str] = Field(default_factory=list)
@@ -210,6 +230,24 @@ class Blueprint(Contract):
         moving = any(j.type != "fixed" for j in self.joints)
         if (self.kind == "articulated") != moving:
             raise ValueError("rigid assets allow no moving joints; articulated assets need one")
+        joint_by_name = {joint.name: joint for joint in self.joints}
+        driven = set()
+        for coupling in self.couplings:
+            if coupling.driven_joint in driven:
+                raise ValueError("a driven joint cannot have multiple ideal couplings")
+            driven.add(coupling.driven_joint)
+            for name in (coupling.driver_joint, coupling.driven_joint):
+                if name not in joint_by_name or joint_by_name[name].type != "continuous":
+                    raise ValueError("ideal coupling currently requires continuous rotary joints")
+        links = {coupling.driven_joint: coupling.driver_joint for coupling in self.couplings}
+        for start in links:
+            visited = set()
+            current = start
+            while current in links:
+                if current in visited:
+                    raise ValueError("cyclic ideal couplings are unsupported")
+                visited.add(current)
+                current = links[current]
         return self
 
 

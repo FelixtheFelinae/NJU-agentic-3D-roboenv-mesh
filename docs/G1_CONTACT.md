@@ -9,7 +9,7 @@
 原版橡胶手缺少碰撞，工作副本根据原视觉几何补齐碰撞，经 Isaac Lab URDF 转换器导入。
 
 `construction/robot_kinematics.py` 读取实际 URDF 的父子变换、关节轴和行程计算 IK。
-`construction/isaac_robot_worker.py` 使用关节 PD 与重力补偿执行路径。
+`experiments/g1/isaac_robot_worker.py` 使用关节 PD 与重力补偿执行路径。
 物体不接收直接位姿、关节角或外力控制；运动由手部接触和摩擦产生。
 
 路径包含桌外抬手、屏幕后方接触、推动屏幕、退到高位，再用另一只手按压并拖动鼠标。
@@ -22,7 +22,7 @@
   --output outputs/user-g1-contact-replay
 
 /home/felixz/.local/share/roboenv/isaac-env/bin/python \
-  scripts/report_robot.py outputs/user-g1-contact-replay
+  -m roboenv_perception.experiments.g1.report outputs/user-g1-contact-replay
 ```
 
 这是固定骨盆、关闭机器人自碰撞的脚本演示，未接入站立平衡策略或自主任务规划。

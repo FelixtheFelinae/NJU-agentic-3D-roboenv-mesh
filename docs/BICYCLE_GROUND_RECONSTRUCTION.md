@@ -79,7 +79,7 @@ Kit 在报告落盘后可能不退出，launcher 记录有界清理；失败时�
 输出目录必须使用新名字。先复用本次感知、COLMAP 和 `alignment-input/wheel-landmarks.json`。
 
 ```bash
-.venv/bin/python scripts/reconstruct_bicycle_ground.py \
+.venv/bin/python -m roboenv_perception.experiments.bicycle.reconstruct_ground \
   --root outputs/bicycle-ground-20261026 --output outputs/bicycle-ground-NEW/ground
 
 .venv/bin/python scripts/build_blender_mesh.py \
@@ -87,9 +87,10 @@ Kit 在报告落盘后可能不退出，launcher 记录有界清理；失败时�
   --blender /home/felixz/.local/share/roboenv/blender/blender-4.5.9-linux-x64/blender
 
 PYTHONPATH=src OPENBLAS_NUM_THREADS=2 \
-  /home/felixz/real2sim/R2S2B/sources/Artisan/.artisan/venv/bin/python \
-  scripts/build_bicycle_asset.py --meshes outputs/bicycle-ground-NEW/blender \
-  --output outputs/bicycle-ground-NEW/artisan
+  /absolute/path/Artisan/.artisan/venv/bin/python \
+  -m roboenv_perception.experiments.bicycle.build_asset --meshes outputs/bicycle-ground-NEW/blender \
+  --output outputs/bicycle-ground-NEW/artisan \
+  --artisan-python /absolute/path/Artisan/.artisan/venv/bin/python
 
 .venv/bin/python scripts/run_table_sim.py --worker bicycle-build \
   --input outputs/bicycle-ground-NEW/artisan --ground outputs/bicycle-ground-NEW/ground \

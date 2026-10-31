@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "roboenv-perception"
 version = "0.2.0"
-description = "CUDA-first VLM + SAM 3 perception and baseline evaluation for Real2Sim"
+description = "Real2Sim perception, asset construction and experimental scene harness"
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"

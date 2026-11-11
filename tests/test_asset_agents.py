@@ -8,9 +8,10 @@ from roboenv_perception.construction.asset_agents import (
     child_environment,
     compile_review_qa,
     review_asset,
+    supplementary_hinge_evidence,
     validate_program,
 )
-from roboenv_perception.io import write_json
+from roboenv_perception.io import sha256, write_json
 
 
 def test_generated_program_cannot_read_credentials_or_escape_bundle(monkeypatch):
@@ -59,3 +60,29 @@ def test_review_rejects_failed_or_unbound_physics_before_api(tmp_path):
                    {'status': 'passed', 'checks': {'contact': True}, 'candidate_sources': {}}]:
         with pytest.raises(ValueError):
             review_asset(None, workspace, [], report, Path('/unused'), '')
+
+
+def test_supplementary_failures_survive_snapshot_relocation_and_reject_changed_assets(tmp_path):
+    import shutil
+
+    old = tmp_path/'old'
+    (old/'simulation/assets').mkdir(parents=True)
+    scene = old/'simulation/scene.usda'
+    asset = old/'simulation/assets/laptop.usd'
+    scene.write_text('actual scene')
+    asset.write_text('actual laptop')
+    write_json(old/'hinge-followup/validation.json', {
+        'source_scene': str(scene), 'source_hashes': {str(scene): sha256(scene), str(asset): sha256(asset)},
+        'status': 'failed', 'checks': {'hold_30': False},
+        'cases': [{'name': 'hold_30', 'status': 'failed', 'hold_drift_deg': 6.03}],
+    })
+    new = tmp_path/'new'
+    shutil.copytree(old, new)
+    data = supplementary_hinge_evidence(new)['hinge-followup']
+    assert data['checks']['hold_30'] is False
+    assert data['cases'][0]['hold_drift_deg'] == 6.03
+    assert data['report_sha256'] == sha256(old/'hinge-followup/validation.json')
+    (new/'simulation/assets/laptop.usd').write_text('changed asset')
+    with pytest.raises(ValueError, match='current scene/assets'):
+        supplementary_hinge_evidence(new)
+    assert supplementary_hinge_evidence(old)['hinge-followup']['status'] == 'failed'

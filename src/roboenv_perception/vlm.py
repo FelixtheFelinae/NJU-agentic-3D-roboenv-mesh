@@ -12,6 +12,7 @@ from typing import Protocol
 from urllib.parse import urlsplit
 
 from .contracts import VLMConfig
+from .execution.context import traced
 from .io import read_json, sha256, write_json
 from .prompts import SYSTEM
 
@@ -145,6 +146,7 @@ class HTTPVLM:
         payload.update(cfg.extra_body)
         return payload
 
+    @traced(lambda a, k: "VLM / " + str(a[1] if len(a) > 1 else k.get("stage")))
     def infer(self, stage, prompt, images, schema, trace):
         cfg = self.config
         # Persist references, not credentials or repeated base64 image contents.
@@ -224,6 +226,7 @@ class ReplayVLM:
         if not config.replay_dir or not self.root.is_dir():
             raise ValueError("replay VLM requires an existing replay_dir")
 
+    @traced(lambda a, k: "Replay VLM / " + str(a[1] if len(a) > 1 else k.get("stage")))
     def infer(self, stage, prompt, images, schema, trace):
         source = self.root / f"{stage}.json"
         result = read_json(source)

@@ -182,3 +182,49 @@ def test_author_and_review_payload_bind_multiple_images_to_roles_and_views(tmp_p
                                              "image_ref": "view-002/context.png", "kind": "context_ref"}]
     assert [row["view_name"] for row in manifest[2:]] == ["preview_front", "preview_top", "preview_underside"]
     assert "top/underside" in review_system and "remain blocking" in review_system
+
+
+def test_workflow_geometry_contract_retry_is_bounded_and_keeps_rejection(tmp_path, monkeypatch):
+    from roboenv_perception.contracts import VLMConfig
+    from roboenv_perception.harness import geometry
+    from roboenv_perception.io import read_json
+
+    blueprint = _fixture_blueprint()
+    valid = {
+        "object_id": blueprint.object_id,
+        "solids": [{"name": "body", "part": "body", "shape": "box", "size_m": [.1, .1, .1],
+                    "source": "assumed", "evidence_refs": ["view-001"]}],
+        "part_masses_kg": {"body": .2},
+    }
+    calls = []
+    class Model:
+        def infer(self, stage, prompt, images, schema, trace):
+            calls.append(prompt)
+            return {} if len(calls) == 1 else valid
+    monkeypatch.setattr(geometry, "make_vlm", lambda *args, **kwargs: Model())
+    geometry.infer_recipe(VLMConfig(), blueprint, {"views": [{"ref_id": "view-001"}]}, [],
+                          tmp_path / "author", schema_revisions=1)
+    assert len(calls) == 2 and "contract_feedback" in calls[-1]
+    assert read_json(tmp_path / "author/trace/rejected.json")["status"] == "invalid_recipe"
+    calls.clear()
+    with pytest.raises(ValueError):
+        geometry.infer_recipe(VLMConfig(), blueprint, {"views": [{"ref_id": "view-001"}]}, [],
+                              tmp_path / "legacy")
+    assert len(calls) == 1  # Legacy path keeps its previous retry behavior.
+
+
+def test_workflow_geometry_contract_retry_does_not_loop_forever(tmp_path, monkeypatch):
+    from roboenv_perception.contracts import VLMConfig
+    from roboenv_perception.harness import geometry
+
+    calls = []
+    class Invalid:
+        def infer(self, *args):
+            calls.append(True)
+            return {}
+    monkeypatch.setattr(geometry, "make_vlm", lambda *args, **kwargs: Invalid())
+    with pytest.raises(ValueError):
+        geometry.infer_recipe(VLMConfig(), _fixture_blueprint(), {"views": [{"ref_id": "view-001"}]}, [],
+                              tmp_path, schema_revisions=1)
+    assert len(calls) == 2
+    assert (tmp_path / "trace-repair-1/rejected.json").is_file()

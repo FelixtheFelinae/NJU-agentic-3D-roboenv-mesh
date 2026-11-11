@@ -27,6 +27,7 @@ def main(argv=None):
     parser.add_argument("--iterations", type=int, required=True)
     parser.add_argument("--synthetic-weight", type=float, required=True)
     parser.add_argument("--training-config", type=Path)
+    parser.add_argument("--resume", type=Path)
     args = parser.parse_args(argv)
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from roboenv_perception.construction.common import read_mask
@@ -122,6 +123,20 @@ def main(argv=None):
     opt.iterations = args.iterations
     opt.position_lr_max_steps = args.iterations
     gaussians.training_setup(opt)
+    first_iteration = 1
+    if args.resume:
+        saved = torch.load(args.resume, map_location="cuda", weights_only=False)
+        from roboenv_perception.io import sha256
+        if saved.get("dataset_sha256") != sha256(args.dataset / "cameras.json") or saved.get("training") != settings.model_dump():
+            raise ValueError("checkpoint 输入或训练配置不一致，不能恢复")
+        gaussians.restore(saved["model"], opt)
+        first_iteration = int(saved["iteration"]) + 1
+        random.setstate(saved["random_state"])
+        np.random.set_state(saved["numpy_state"])
+        torch.set_rng_state(saved["torch_state"].cpu())
+        torch.cuda.set_rng_state(saved["cuda_state"].cpu())
+        if first_iteration > args.iterations:
+            raise ValueError("checkpoint 已完成当前训练预算")
     densify_has_radii = "radii" in inspect.signature(gaussians.densify_and_prune).parameters
     densify_until = min(settings.densify_until_iter, args.iterations)
     pipe = SimpleNamespace(
@@ -151,6 +166,11 @@ def main(argv=None):
         folder = args.output / "checkpoints" / f"iteration_{iteration}"
         folder.mkdir(parents=True)
         gaussians.save_ply(str(folder / "point_cloud.ply"))
+        # A real fixed-camera preview is available even with no holdout views.
+        preview_camera = views[len(views) // 2][1]
+        preview = render(preview_camera, gaussians, pipe, background)["render"]
+        pixels = preview.clamp(0, 1).permute(1, 2, 0).cpu().numpy()
+        Image.fromarray((pixels * 255).astype(np.uint8)).save(folder / "preview.png")
         (folder / "holdout").mkdir()
         evaluation = []
         for frame, camera, _, observed, _ in views:
@@ -194,7 +214,7 @@ def main(argv=None):
             flush=True,
         )
 
-    for iteration in range(1, args.iterations + 1):
+    for iteration in range(first_iteration, args.iterations + 1):
         frame, camera, weights, _, structural = random.choice(train)
         gaussians.update_learning_rate(iteration)
         if iteration % 1000 == 0:
@@ -227,7 +247,7 @@ def main(argv=None):
         gaussians.optimizer.step()
         gaussians.optimizer.zero_grad(set_to_none=True)
         # Save before opacity resets so checkpoints represent the fitted state.
-        if iteration in save_at:
+        if iteration in save_at or iteration == first_iteration:
             save_checkpoint(iteration)
         with torch.no_grad():
             if adaptive and iteration < densify_until:
@@ -251,6 +271,17 @@ def main(argv=None):
                         raise RuntimeError(f"adaptive topology count outside limits: {count}")
                 if iteration % settings.opacity_reset_interval == 0:
                     gaussians.reset_opacity()
+        if iteration in save_at or iteration == first_iteration:
+            from roboenv_perception.io import sha256
+            folder = args.output / "checkpoints" / f"iteration_{iteration}"
+            temporary = folder / "training_state.next"
+            torch.save({"iteration": iteration, "model": gaussians.capture(), "training": settings.model_dump(),
+                        "dataset_sha256": sha256(args.dataset / "cameras.json"), "random_state": random.getstate(),
+                        "numpy_state": np.random.get_state(), "torch_state": torch.get_rng_state(),
+                        "cuda_state": torch.cuda.get_rng_state()}, temporary)
+            temporary.replace(folder / "training_state.pt")
+            write_json(folder / "checkpoint.json", {"iteration": iteration,
+                       "sha256": sha256(folder / "training_state.pt"), "state": "after_optimizer_and_topology_update"})
         if iteration == 1 or iteration % 100 == 0:
             print(
                 json.dumps(

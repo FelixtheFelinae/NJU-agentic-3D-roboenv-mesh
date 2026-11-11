@@ -51,6 +51,10 @@ def run(args):
     ).app
     try:
         import isaaclab.sim as sim_utils
+        from roboenv_perception.execution.isaac_runtime import (
+            physx_config,
+            simulation_config,
+        )
         import numpy as np
         import omni.usd
         import torch
@@ -94,11 +98,11 @@ def run(args):
             if not omni.usd.get_context().open_stage(str(source)):
                 raise RuntimeError("Failed to reload drivetrain scene")
         sim = sim_utils.SimulationContext(
-            sim_utils.SimulationCfg(
+            simulation_config(
                 device="cpu",
                 dt=dt,
                 render_interval=8,
-                physx=sim_utils.PhysxCfg(
+                physx=physx_config(
                     solver_type=1, enable_external_forces_every_iteration=True
                 ),
             )

@@ -146,12 +146,17 @@ class Joint(Contract):
     axis_child: tuple[float, float, float] | None = None
     origin_hint: str
     travel: Quantity = Field(default_factory=Quantity)
+    effort_limit: Quantity = Field(default_factory=Quantity)
+    velocity_limit: Quantity = Field(default_factory=Quantity)
     rest: Literal["at_min", "centered", "at_max"] | None = None
     evidence_kind: Literal["observed", "inferred", "assumed"]
     evidence_refs: list[str]
 
     @model_validator(mode="after")
     def legal_motion(self):
+        for limit in (self.effort_limit, self.velocity_limit):
+            if limit.value is not None and (not math.isfinite(limit.value) or limit.value <= 0):
+                raise ValueError("joint effort/velocity limits must be finite and positive")
         if self.type != "fixed":
             if self.axis_child is None or not math.isclose(
                 sum(v * v for v in self.axis_child), 1.0, abs_tol=1e-4

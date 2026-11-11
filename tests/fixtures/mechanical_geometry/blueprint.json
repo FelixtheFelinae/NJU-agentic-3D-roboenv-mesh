@@ -1,0 +1,241 @@
+{
+  "schema_version": "envcreator.assembly-blueprint/1",
+  "object_id": "shaft-hole-controlled",
+  "kind": "articulated",
+  "asset_brief": {
+    "object_id": "shaft-hole-controlled",
+    "category": "shaft_bushing",
+    "summary": "Synthetic shaft and through-bored bushing fixture; all dimensions are test assumptions.",
+    "build_route": "articulated",
+    "support_mode": "unknown",
+    "reference_interpretation": "single",
+    "evidence_refs": [
+      "prior:controlled-shaft-hole-fixture"
+    ]
+  },
+  "part_definitions": [
+    {
+      "id": "housing_definition",
+      "category": "housing",
+      "geometry": "through-bored annulus with datum box",
+      "material_appearance": "gray test material",
+      "collision_intent": "preserve bore",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ]
+    },
+    {
+      "id": "shaft_definition",
+      "category": "shaft",
+      "geometry": "circular shaft",
+      "material_appearance": "gray test material",
+      "collision_intent": "preserve bore",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ]
+    }
+  ],
+  "part_instances": [
+    {
+      "name": "housing",
+      "definition_id": "housing_definition",
+      "parent": null
+    },
+    {
+      "name": "shaft",
+      "definition_id": "shaft_definition",
+      "parent": "housing"
+    }
+  ],
+  "interfaces": [
+    {
+      "id": "bore",
+      "part": "housing",
+      "kind": "hole",
+      "basis": "assumed",
+      "description": "Through-bore surface",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ]
+    },
+    {
+      "id": "journal",
+      "part": "shaft",
+      "kind": "shaft",
+      "basis": "assumed",
+      "description": "Outer journal surface",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ]
+    },
+    {
+      "id": "housing_top",
+      "part": "housing",
+      "kind": "plane",
+      "basis": "assumed",
+      "description": "Datum box top planar face",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ]
+    },
+    {
+      "id": "housing_side",
+      "part": "housing",
+      "kind": "plane",
+      "basis": "assumed",
+      "description": "Datum box side planar face",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ]
+    }
+  ],
+  "mates": [
+    {
+      "id": "bearing_fit",
+      "type": "revolute",
+      "interfaces": [
+        "bore",
+        "journal"
+      ],
+      "basis": "assumed",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ],
+      "assumptions": [
+        "Geometric fit only; no contact/friction implementation claimed"
+      ]
+    }
+  ],
+  "joints": [
+    {
+      "name": "shaft_rotation",
+      "parent": "housing",
+      "child": "shaft",
+      "type": "revolute",
+      "axis_child": [
+        0,
+        0,
+        1
+      ],
+      "origin_hint": "test fixture shared center",
+      "travel": {
+        "value": 1.5,
+        "source": "assumed",
+        "evidence_refs": [
+          "prior:controlled-shaft-hole-fixture"
+        ],
+        "rationale": "Explicit ground-truth test design; not recovered from video."
+      },
+      "rest": "at_min",
+      "evidence_kind": "assumed",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ],
+      "mate_id": "bearing_fit"
+    }
+  ],
+  "geometric_constraints": [
+    {
+      "id": "axes",
+      "type": "coaxial",
+      "interface_refs": [
+        "bore",
+        "journal"
+      ],
+      "basis": "assumed",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ],
+      "description": "Finite cylinders share an axis",
+      "parameters": {}
+    },
+    {
+      "id": "gap",
+      "type": "clearance",
+      "interface_refs": [
+        "bore",
+        "journal"
+      ],
+      "basis": "assumed",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ],
+      "description": "Radial clearance and finite insertion depth",
+      "parameters": {
+        "minimum_radial_clearance": {
+          "quantity": {
+            "value": 0.0001,
+            "source": "assumed",
+            "evidence_refs": [
+              "prior:controlled-shaft-hole-fixture"
+            ],
+            "rationale": "Explicit ground-truth test design; not recovered from video."
+          },
+          "unit": "m"
+        },
+        "maximum_radial_clearance": {
+          "quantity": {
+            "value": 0.0003,
+            "source": "assumed",
+            "evidence_refs": [
+              "prior:controlled-shaft-hole-fixture"
+            ],
+            "rationale": "Explicit ground-truth test design; not recovered from video."
+          },
+          "unit": "m"
+        },
+        "minimum_axial_overlap": {
+          "quantity": {
+            "value": 0.015,
+            "source": "assumed",
+            "evidence_refs": [
+              "prior:controlled-shaft-hole-fixture"
+            ],
+            "rationale": "Explicit ground-truth test design; not recovered from video."
+          },
+          "unit": "m"
+        }
+      }
+    },
+    {
+      "id": "datum_orthogonal",
+      "type": "orthogonal",
+      "interface_refs": [
+        "housing_top",
+        "housing_side"
+      ],
+      "basis": "assumed",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ],
+      "description": "Two actual datum plane normals are perpendicular",
+      "parameters": {}
+    },
+    {
+      "id": "datum_planar",
+      "type": "planar",
+      "interface_refs": [
+        "housing_top"
+      ],
+      "basis": "assumed",
+      "evidence_refs": [
+        "prior:controlled-shaft-hole-fixture"
+      ],
+      "description": "Top analytic face is planar",
+      "parameters": {}
+    }
+  ],
+  "evidence": [
+    {
+      "id": "prior:controlled-shaft-hole-fixture",
+      "origin": "prior",
+      "description": "Controlled synthetic mechanical test, no video or real-world truth."
+    }
+  ],
+  "acceptance": [
+    "Fit satisfies finite coaxiality, radial clearance and axial overlap; no physical claims"
+  ],
+  "assumptions": [
+    "Reference pose uses explicit translation-only builder placement."
+  ]
+}

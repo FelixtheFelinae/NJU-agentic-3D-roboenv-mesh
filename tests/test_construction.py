@@ -169,9 +169,10 @@ def test_design_binds_self_review_and_preserves_handoff(perception, tmp_path, mo
                     "evidence_refs": ["view-001"],
                 }
             if "-blueprint-" in stage:
+                from roboenv_perception.construction.assembly_blueprint import migrate_envcreator
                 # Intake JSON follows the explicitly labelled section.
                 brief = json.loads(prompt.split("\nIntake:\n")[1].split("\nPrevious blueprint:")[0])
-                return rigid(brief["object_id"])
+                return migrate_envcreator(rigid(brief["object_id"]), brief).model_dump(mode="json")
             blueprint = rigid(
                 json.loads(prompt.split("\nJSON schema:")[0].rsplit("\n", 1)[1])["object_id"]
             )

@@ -258,7 +258,8 @@ def _write_usda(path: Path, support: SupportSpec, placed: list[dict]):
     path.write_text("\n".join(body), encoding="utf-8")
 
 
-def assemble_scene(assets: list[SceneAsset], output: Path, support: SupportSpec) -> Path:
+def assemble_scene(assets: list[SceneAsset], output: Path, support: SupportSpec, *,
+                   usd_python: Path | None = None) -> Path:
     """Create portable scene.usda, layout provenance, and copied USD dependencies.
 
     This is a composition result. A later Isaac reload and force/contact test
@@ -332,6 +333,20 @@ def assemble_scene(assets: list[SceneAsset], output: Path, support: SupportSpec)
                 }
             )
         _write_usda(output / "scene.usda", support, placed)
+        if usd_python:
+            import subprocess
+
+            from ..construction.asset_agents import child_environment
+
+            bootstrap = ("import sys;sys.path.insert(0,sys.argv[1]);"
+                         "from roboenv_perception.standard_interactions.placement import main;"
+                         "sys.argv=sys.argv[2:];main()")
+            with (output / "standard-placement.log").open("w") as log:
+                subprocess.run([str(usd_python), "-c", bootstrap,
+                                str(Path(__file__).resolve().parents[2]), "standard-placement",
+                                "--scene", str((output / "scene.usda").resolve())],
+                               env=child_environment(), stdout=log, stderr=subprocess.STDOUT,
+                               check=True, timeout=120)
         for item in placed:
             if not relative_file(output, item["usd_ref"].removeprefix("./")).is_file():
                 raise ValueError(f"unresolved scene USD reference: {item['usd_ref']}")

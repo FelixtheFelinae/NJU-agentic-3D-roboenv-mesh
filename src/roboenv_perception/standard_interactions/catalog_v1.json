@@ -1,0 +1,319 @@
+{
+  "schema": "envcreator.standard-interaction-kit/1",
+  "id": "standard-interaction-kit-v1-candidate.1",
+  "status": "candidate_unverified",
+  "created_date": "2026-11-04",
+  "sources": [
+    {
+      "path": "outputs/triangular-box-20261030-v9/delivery/triangular_box.usda",
+      "sha256": "8fb4610ba5cebf9d986334d4a2ac373a3611e4f7e884d94aba90a60d7764ecee"
+    },
+    {
+      "path": "outputs/triangular-box-20261030-v9/robot-bundle-final/scene/deps/0001-electric_screwdriver.usda",
+      "sha256": "992f3f22e7840e059539311b3e2371cc9b4242042524aaa301fd3b8afcc150bf"
+    },
+    {
+      "path": "reports/2026-11-03-assembly-validation/README.md",
+      "sha256": "a032898b04b5df6519703c0954b296cf1d58769994457199d8e59eb3c6f5347a"
+    },
+    {
+      "path": "experiments/triangular_box/build_v9.py",
+      "sha256": "036dcb03e6c49c6d88c3bdc2f5abcdb8f8e9fb3b0c42350d605f4705c08430b2",
+      "snapshot_path": "outputs/triangular-box-20261030-v9/delivery/build_v9.py"
+    },
+    {
+      "path": "outputs/triangular-box-20261030-v9/delivery/sources.json",
+      "sha256": "cb19cc1c0349e767b97c50f7e889bdfc0157edde41ab378f0a17af0e85928ede"
+    },
+    {
+      "path": "src/roboenv_perception/tools/triangular_box_blender.py",
+      "sha256": "f201c392ea45e565116293e2e3f7867886fc0a52da17572f886e01978f3f5743"
+    }
+  ],
+  "limitations": [
+    "Ideal observation; fixed tool carriage or wrist mount is not a grasp.",
+    "Equivalent preload and surrogate socket contact; no resolved threads or measured material calibration.",
+    "Fixed-base startup helix residual and release sampling remain unresolved; no full physical acceptance.",
+    "Only world +Z, tapped moving support, one clamped member are compiled in this candidate."
+  ],
+  "fasteners": {
+    "M4x0.7_hex_socket@1": {
+      "status": "reference_hypothesis",
+      "lead_m": 0.0007,
+      "socket_af_m": 0.0031,
+      "socket_depth_m": 0.0025,
+      "shaft_radius_m": 0.002,
+      "head_radius_m": 0.004,
+      "head_height_m": 0.004,
+      "shaft_length_m": 0.0161,
+      "density_kg_m3": 7850.0,
+      "pitch_diameter_m": 0.00354533666304,
+      "nominal_thread": "M4x0.7 single-start right-handed; assumed test specimen",
+      "geometry_source": "tools/triangular_box_blender.py:44-49; assumed specimen dimensions, not a dimensional standard certification"
+    }
+  },
+  "tools": {
+    "electric_screwdriver_v9@1": {
+      "frames": {
+        "bearing": {
+          "body": "housing",
+          "position_m": [
+            0,
+            0.08,
+            0
+          ]
+        },
+        "grasp": {
+          "approx_diameter_m": 0.04,
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "body": "housing",
+          "position_m": [
+            0,
+            -0.025,
+            0
+          ],
+          "status": "candidate_not_grasp_tested",
+          "usable_axial_interval_m": [
+            -0.06,
+            0.015
+          ]
+        },
+        "tcp": {
+          "body": "spindle",
+          "forward_axis": [
+            0,
+            1,
+            0
+          ],
+          "housing_rest_position_m": [
+            0,
+            0.13,
+            0
+          ],
+          "position_m": [
+            0,
+            0.05,
+            0
+          ]
+        }
+      },
+      "bit": {
+        "drive_shape": "external_hex",
+        "engagement": "requires matching socket; no magnetic or automatic attachment",
+        "shank_across_flats_m": 0.00635,
+        "status": "assumed_not_cart_matched",
+        "tip_across_flats_m": 0.003
+      },
+      "motor": {
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "brake": "enabled and rpm=0: torque-limited active brake",
+        "command": "set_motor(stage, tool_root, rpm, enabled=True)",
+        "default_rpm": 8.0,
+        "disabled": "coast; zero motor torque",
+        "initial_state": "disabled",
+        "joint": "spindle_spin",
+        "max_command_rpm": 30.0,
+        "parameter_source": "slow experimental 3 Nm output; manufacturer capacity reference 2.5 soft / 5 hard Nm",
+        "positive_direction": "right-hand rotation about +Y, from handle toward tip",
+        "reaction": "joint drive applies internal equal-and-opposite torque; housing is free",
+        "simulation_joint_name": "joint_spindle_spin",
+        "torque_limit_Nm": 3.0,
+        "usd_velocity_damping": 10.0,
+        "passive_damping_Nm_s_rad": 5e-05,
+        "passive_torque_limit_Nm": 0.01,
+        "off_behavior": "unpowered passive bearing drag; uncalibrated assumption"
+      },
+      "source": {
+        "design_method": "agent-authored recipe using manufacturer reference",
+        "image_url": "https://www.bosch-professional.com/binary/ocsmedia/optimized/750x422/o428771v54_Bosch_GO_3_SOS_06019H2201.png",
+        "manufacturer_facts": {
+          "bit_holder": "1/4 inch internal hexagon",
+          "listed_weight_excluding_battery_kg": 0.32,
+          "max_hard_soft_torque_Nm": [
+            5,
+            2.5
+          ],
+          "no_load_rpm_range": [
+            306,
+            396
+          ]
+        },
+        "retrieved_date": "2026-10-28",
+        "scope": "shape/interface reference; no claim of exact product dimensions or dynamics",
+        "url": "https://www.bosch-professional.com/gb/en/products/bosch-go-06019H2201"
+      },
+      "materials": {
+        "grip_static_dynamic_friction": [
+          0.9,
+          0.7
+        ],
+        "housing_static_dynamic_friction": [
+          0.6,
+          0.5
+        ],
+        "restitution": 0.0,
+        "source": "unmeasured priors",
+        "steel_static_dynamic_friction": [
+          0.4,
+          0.3
+        ]
+      },
+      "approach_envelope": {
+        "radius_m": 0.003175,
+        "length_m": 0.06,
+        "source": "task-level bit corridor hypothesis; not complete housing clearance or robot reach"
+      }
+    }
+  },
+  "runtimes": {
+    "native-mimic-helical-v9@1": {
+      "solver": "native-mimic-helical-v1",
+      "supported_axis": [
+        0,
+        0,
+        1
+      ],
+      "supported_mate_kind": "tapped_support",
+      "thread_parameters": {
+        "preload_release_m": 0.0001,
+        "breakaway_Nm": 2.0,
+        "running_Nm": 0.05,
+        "angular_damping": 0.002,
+        "coupling_stiffness": 1000000.0,
+        "coupling_damping": 20.0,
+        "lateral_stiffness": 200000.0,
+        "lateral_damping": 5.0
+      },
+      "engagement_parameters": {
+        "stiffness_Nm_rad": 50.0,
+        "damping_Nm_s_rad": 0.02,
+        "torque_limit_Nm": 3.0,
+        "radial_tolerance_m": 5e-05,
+        "angular_tolerance_rad": 0.05235987755982989,
+        "phase_tolerance_rad": 0.05235987755982989,
+        "socket_depth_m": 0.0025,
+        "min_insertion_m": 0.0005
+      },
+      "solver_thread": {
+        "pretension_N": 2500.0,
+        "relaxation_m": 4e-05,
+        "settling_ramp_s": 1.0,
+        "thread_mu": 0.14,
+        "bearing_mu": 0.14,
+        "friction_stiffness_Nm_rad": 1000.0,
+        "bearing_radius_m": 0.003,
+        "preload_application": "clamped_members",
+        "pitch_diameter_m": 0.00354533666304,
+        "running_torque_Nm": 0.005,
+        "friction_damping_Nm_s_rad": 1000000.0
+      },
+      "tilt_stiffness_Nm_rad": 0.3,
+      "magnetic_retention": {
+        "model": "3N capped compliant retention after valid geometric engagement",
+        "real_magnet_simulation": false
+      },
+      "assumptions": [
+        "M4x0.7 single-start native helical constraint, no resolved thread surfaces",
+        "aluminium enclosure and steel screw densities; friction unmeasured",
+        "preassembled bolt-stack preload relaxes over 40 micrometres; not resolved elastic stress",
+        "reduced bolt tension applies clamp load to lid/body; native joint supplies thread and preload bearing resistance; actual bolt internal stress unresolved",
+        "ideal wrist-fixed tool and capped magnetic retention remain"
+      ],
+      "numerical_carrier": {
+        "mass_kg": 0.001,
+        "diagonal_inertia_kg_m2": 1e-07
+      },
+      "source_files": [
+        {
+          "path": "src/roboenv_perception/tools/native_screw_runtime.py",
+          "sha256": "93512efb0eaa72bf29eac23b3a78eb2e71c15d8c93d03feb35dfa1588f0dddc5"
+        },
+        {
+          "path": "src/roboenv_perception/tools/solver_thread.py",
+          "sha256": "0185173b32bb1d073a25ceb598f80e720fad80cac8df17e1db5ee8e0a944c634"
+        },
+        {
+          "path": "src/roboenv_perception/tools/fastener.py",
+          "sha256": "cdbed8401e5f5002d9da18cea98c10b372cbb1926ef381e429db2990fcbd5565"
+        },
+        {
+          "path": "src/roboenv_perception/tools/screwdriving.py",
+          "sha256": "abeab37f4d6ca551f30260bca49a88536c872b4defaf580cdcf491ed54fc1635"
+        }
+      ],
+      "known_revision": "delivered friction_damping_Nm_s_rad=1000000; original build_v9.py used 0.01; never silently interchange; actual USD rotX damping is 0.01*pi/180; metadata friction_damping is not read by SolverThread.step",
+      "usd_authoring": {
+        "angular_limit_deg": 100000000.0,
+        "hinge_damping_Nm_s_rad": 1000000.0,
+        "friction_drive_damping_Nm_s_rad": 0.01,
+        "friction_drive_stiffness_Nm_rad": 1000.0,
+        "friction_initial_limit_Nm": 0.005,
+        "articulation_position_iterations": 128,
+        "articulation_velocity_iterations": 4,
+        "rigid_position_iterations": 64,
+        "rigid_velocity_iterations": 8
+      }
+    }
+  },
+  "protocols": {
+    "assembly-v9@1": {
+      "status": "frozen_existing_protocol_not_new_acceptance",
+      "dt_s": 0.001,
+      "nominal_rpm": 30.0,
+      "accelerated_bench_rpm": 120.0,
+      "tool_profile": "accelerated_bench_120rpm",
+      "helix_residual_tolerance_m": 5e-05,
+      "release_sample_min_travel_m": 0.0079,
+      "partial_anchor_tolerance_m": 0.002,
+      "full_lift_required_m": 0.02,
+      "complete_removal_m": 0.024,
+      "motor_stop_tolerance_rpm": 1.0,
+      "lid_pull_cap_N": 20.0,
+      "cases": [
+        "normal_removal",
+        "wrong_bit_size",
+        "offset",
+        "tilted",
+        "gap",
+        "motor_off",
+        "low_torque",
+        "partial_assembly_holds",
+        "all_removed_lid_lift",
+        "release_free_6dof"
+      ],
+      "source_files": [
+        {
+          "path": "experiments/triangular_box/evaluate_assembly.py",
+          "sha256": "56f2b0093267f0e1674a0cfe0c171bf8d7ef91578c7f3125852407546d0b847a"
+        },
+        {
+          "path": "experiments/triangular_box/assembly_protocol.py",
+          "sha256": "5304685a762ec45d10f0deec06e4717648d0ae79f0ec26737e00a013c7c1e8d1"
+        },
+        {
+          "path": "experiments/triangular_box/validate_tool.py",
+          "sha256": "3dd885b58d4ed939912030ff1c5a8e87f9241b2be4bd5d09cef47118a3660a4c"
+        }
+      ],
+      "known_failures": [
+        "release check uses first post-release sample; synchronous constraint evidence pending",
+        "fixed-base startup residual above 50 micrometres"
+      ],
+      "observation_permissions": "privileged poses, joints, forces and internal connection states"
+    }
+  },
+  "tool_profiles": {
+    "accelerated_bench_120rpm": {
+      "max_command_rpm": 120.0,
+      "scope": "explicit ideal bench override; base tool remains limited to 30rpm"
+    }
+  }
+}

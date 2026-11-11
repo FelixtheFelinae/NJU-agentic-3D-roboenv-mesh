@@ -1,0 +1,164 @@
+{
+  "schema_version": "roboenv.construction.v1",
+  "object_id": "studio:run-fd9c47641ac4:t0002",
+  "kind": "articulated",
+  "frame_convention": "metres; Z-up; front=+Y; local object frame",
+  "target_dimensions_m": {
+    "x": {
+      "value": null,
+      "source": "unknown",
+      "evidence_refs": [],
+      "rationale": "未提供米制测量或参照物标定，无法从图像像素推算绝对尺寸。"
+    },
+    "y": {
+      "value": null,
+      "source": "unknown",
+      "evidence_refs": [],
+      "rationale": "未提供米制测量或参照物标定，无法从图像像素推算绝对尺寸。"
+    },
+    "z": {
+      "value": null,
+      "source": "unknown",
+      "evidence_refs": [],
+      "rationale": "未提供米制测量或参照物标定，无法从图像像素推算绝对尺寸。"
+    }
+  },
+  "parts": [
+    {
+      "name": "base_chassis",
+      "parent": null,
+      "role": "laptop_base",
+      "geometry": "rectangular_prism_with_chamfered_edges",
+      "hollow": false,
+      "dimensions_m": {
+        "x": {
+          "value": null,
+          "source": "unknown",
+          "evidence_refs": [],
+          "rationale": "绝对尺寸未知。几何先验假设为矩形平板，长宽比约为3:2（基于view-004视觉估算），但无实测数据。"
+        },
+        "y": {
+          "value": null,
+          "source": "unknown",
+          "evidence_refs": [],
+          "rationale": "绝对尺寸未知。"
+        },
+        "z": {
+          "value": null,
+          "source": "unknown",
+          "evidence_refs": [],
+          "rationale": "绝对尺寸未知。厚度视觉上均匀，约15-20mm量级但未测得。"
+        }
+      },
+      "material_appearance": "silver_anodized_aluminum_finish",
+      "collision_intent": "rigid_manipulation_surface",
+      "evidence_refs": [
+        "view-001",
+        "view-002",
+        "view-003",
+        "view-004",
+        "view-005",
+        "view-006"
+      ]
+    },
+    {
+      "name": "lid_assembly",
+      "parent": "base_chassis",
+      "role": "display_lid",
+      "geometry": "thin_rectangular_panel_with_black_bezel",
+      "hollow": false,
+      "dimensions_m": {
+        "x": {
+          "value": null,
+          "source": "unknown",
+          "evidence_refs": [],
+          "rationale": "绝对尺寸未知。假设与底座宽度一致。"
+        },
+        "y": {
+          "value": null,
+          "source": "unknown",
+          "evidence_refs": [],
+          "rationale": "绝对尺寸未知。假设与底座深度一致。"
+        },
+        "z": {
+          "value": null,
+          "source": "unknown",
+          "evidence_refs": [],
+          "rationale": "绝对尺寸未知。视觉上比底座略薄。"
+        }
+      },
+      "material_appearance": "silver_aluminum_back_with_glass_front",
+      "collision_intent": "rigid_manipulation_surface",
+      "evidence_refs": [
+        "view-001",
+        "view-002",
+        "view-003",
+        "view-004",
+        "view-005",
+        "view-006"
+      ]
+    }
+  ],
+  "joints": [
+    {
+      "name": "hinge_joint",
+      "parent": "base_chassis",
+      "child": "lid_assembly",
+      "type": "revolute",
+      "axis_child": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "origin_hint": "rear_edge_center_of_base_top_surface",
+      "travel": {
+        "value": null,
+        "source": "unknown",
+        "evidence_refs": [],
+        "rationale": "视频中物体保持静止开合角度，未观察到运动范围。基于品类常识假设典型笔记本开合范围（如0-135度），但未实测。"
+      },
+      "effort_limit": {
+        "value": null,
+        "source": "unknown",
+        "evidence_refs": [],
+        "rationale": "铰链阻尼/摩擦力矩未测得。需假设非零值以维持开启状态，但具体数值未知。"
+      },
+      "velocity_limit": {
+        "value": null,
+        "source": "unknown",
+        "evidence_refs": [],
+        "rationale": "最大开合角速度未测得。"
+      },
+      "rest": "at_max",
+      "evidence_kind": "assumed",
+      "evidence_refs": [
+        "view-001",
+        "view-004"
+      ]
+    }
+  ],
+  "couplings": [],
+  "acceptance": [
+    "结构描述仅包含可见部件（底座、显示屏总成）及基于品类常识推断的隐藏铰链连接。",
+    "键盘、触控板、屏幕显示内容均视为表面纹理/外观细节，不作为独立物理部件建模。",
+    "所有尺寸、质量、关节参数均标记为unknown或assumed，未伪造测量值。",
+    "几何形状遵循机械先验（矩形、正交），未声称从透视图直接测得直角。",
+    "铰链轴方向基于视觉观察（平行于后边缘）设定，但旋转极限和动力学参数保留为未知。"
+  ],
+  "assumptions": [
+    "假设底座与显示屏之间通过隐藏式旋转副（Revolute Joint）连接，允许绕平行于后边缘的水平轴（X轴）相对转动。",
+    "假设笔记本外壳为刚性矩形体，遵循机械先验：面板平直、邻边垂直、对边平行，尽管透视图存在畸变。",
+    "假设键盘键帽、触控板表面纹理及屏幕显示内容为外观细节，不作为独立可动物理部件建模。",
+    "假设铰链具有阻尼或摩擦力以维持当前开启角度，具体扭矩值未知。",
+    "假设内部紧固件（螺丝）存在但不可见，不纳入当前几何描述。",
+    "假设当前视角下观察到的开合角度为静止状态，非运动过程中的瞬时状态。"
+  ],
+  "unresolved": [
+    "绝对尺寸（长宽高、厚度）、质量、质心位置及转动惯量均未测量，需后续标定。",
+    "铰链的具体机械结构（轴承类型、轴径）、旋转角度极限（min/max）及 effort_limit/velocity_limit 未知。",
+    "材料物理属性（密度、摩擦系数、restitution）未知，仅知外观为金属质感。",
+    "接口位置（侧面端口）可见但具体规格及深度未知。",
+    "屏幕玻璃厚度及内部组件分布未知，视为均匀刚体或空心壳近似。",
+    "未观察到开合运动，无法验证铰链实际自由度及运动平滑性。"
+  ]
+}

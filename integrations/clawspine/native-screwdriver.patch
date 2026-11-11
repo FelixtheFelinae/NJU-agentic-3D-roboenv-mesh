@@ -1,0 +1,944 @@
+diff --git a/playground/packages/platform-g1-arena-dsh/src/native.ts b/playground/packages/platform-g1-arena-dsh/src/native.ts
+index 5fe54d8..9229dc1 100644
+--- a/playground/packages/platform-g1-arena-dsh/src/native.ts
++++ b/playground/packages/platform-g1-arena-dsh/src/native.ts
+@@ -133,11 +133,17 @@ export default class NativeG1SimPlatform extends Service {
+       list_low_reflexes: "Read the body's actual registered Python Low Reflex versions, source digests and step interface.",
+       register_low_reflex: "Load a Python .py sourcePath from the mounted robot workspace. Module exports step(observation, elapsed_s, parameters) -> {upperJointPositions, velocity, bodyPosture?}. Actual body control tick executes it; do not import this as a DSH .mjs file plugin. Versions bind at each action admission.",
+       unregister_low_reflex: "Unregister a Python Low Reflex name/version for future actions; an admitted action retains its bound version until stop.",
++      read_power_tool: "Read measured motor RPM, bit TCP and axis, geometric engagement, thread state and magnetic retention from the native tool runtime. These are explicitly instrumented simulation measurements, not vision-only inference. No pose writes or success claim.",
++      command_power_tool: "Set the mounted electric screwdriver motor, without pressing a physical button. Positive RPM is tightening and negative RPM loosening for a downward-facing bit. Off applies bounded braking. Motor command expires after durationMs (max 30s); renew explicitly if needed. release=true disables the declared magnetic retention. Robot motion still uses execute_whole_body / Low Reflex. Inspect read_power_tool afterward; command acceptance is not physical completion.",
+       idle_robot: "Cancel current motion and wait for measured stop and Core release. Returns pending-drain after a bounded wait when release is unconfirmed; read health metrics for current state. Unlike emergency_stop, this does not permanently latch the native service.",
+     };
+     return Object.entries(descriptions).map(([name, description]) => ({ name,
+       description: description + (name.startsWith("execute_") ? " If measured stop/release is delayed, returns pending-drain within maxDurationMs plus 5 seconds. This is not completion: physical ownership remains held and new motion is blocked until confirmed release; read health metrics for current state." : ""),
+-      parameters: name === "execute_whole_body" ? wholeBodySkillParameters : name === "execute_navigation" ? navigationSkillParameters
++      parameters: name === "command_power_tool" ? { type: "object", properties: {
++        enabled: { type: "boolean" }, rpm: { type: "number", minimum: -30, maximum: 30 },
++        durationMs: { type: "integer", minimum: 1, maximum: 30000 }, release: { type: "boolean" } },
++        required: ["enabled", "rpm", "durationMs", "release"], additionalProperties: false }
++        : name === "execute_whole_body" ? wholeBodySkillParameters : name === "execute_navigation" ? navigationSkillParameters
+         : name === "execute_low_reflex" ? lowReflexParameters : name === "read_scene" ? readSceneParameters
+           : name === "read_camera" || name === "read_depth" ? { type: "object", properties: {
+               eye: { type: "string", enum: ["left", "right"], default: "left" },
+@@ -156,6 +162,18 @@ export default class NativeG1SimPlatform extends Service {
+   async #call(name: string, args: unknown, exec: ToolRunContext): Promise<unknown> {
+     this.#robot.requireCaller(exec);
+     let settings = this.#robot.getSettings();
++    if (name === "read_power_tool") return { canonical: json(await this.#backend.json("/v1/power-tool", undefined, exec.signal)) };
++    if (name === "command_power_tool") {
++      if (this.#robot.stoppedReason || this.#maintenance || !this.#fresh()) throw new Error("ROBOT_STOPPED_OR_RESTARTING");
++      const value = args as Record<string, unknown>;
++      const invocation = this.#robot.invocation(exec, name, json(value), 30000);
++      const abort = () => { void this.#backend.json("/v1/power-tool/stop", {}, AbortSignal.timeout(5000)).catch(() => {}); };
++      exec.signal.addEventListener("abort", abort, { once: true });
++      try {
++        exec.signal.throwIfAborted();
++        return { canonical: json(await this.#backend.json("/v1/power-tool", { ...value, command_id: invocation.commandId }, exec.signal)) };
++      } finally { exec.signal.removeEventListener("abort", abort); }
++    }
+     if (name === "read_scene" && !settings.privilegedInfo) throw new Error("ROBOT_PRIVILEGED_INFORMATION_DISABLED:Use permitted cameras, joint/odometry/contact sensors; the human can change Plugin Settings.");
+     const channel = ({ read_camera: "rgb", read_depth: "depth", read_third_person: "thirdPerson", read_pose: "odometry" } as const)[name as "read_camera" | "read_depth" | "read_third_person" | "read_pose"];
+     if (channel && !nativeObservationEnabled(settings, channel)) throw new Error(`ROBOT_OBSERVATION_DISABLED:${channel}`);
+@@ -183,6 +201,7 @@ export default class NativeG1SimPlatform extends Service {
+       const receipt = await this.skills.waitForFeedback(physical, admission.deadlineMs + SIM_DRAIN_FEEDBACK_MS, exec.signal);
+       return { canonical: permittedNativeReceipt(receipt, this.#robot.getSettings()) };
+     }
++    if (name === "idle_robot") { await this.#backend.json("/v1/power-tool/stop", {}, exec.signal); }
+     if (name === "idle_robot") return { canonical: await this.skills.waitForFeedback(
+       this.skills.stop("Native agent requested idle").then(() => ({ controllerIdle: !this.skills.busy })),
+       Date.now() + SIM_DRAIN_FEEDBACK_MS, exec.signal) };
+@@ -331,11 +350,13 @@ export default class NativeG1SimPlatform extends Service {
+   }
+   readonly stop = async (reason = "Human requested stop"): Promise<void> => {
+     this.safety.transition({ type: "emergency_stop", reason });
+-    await this.skills.stop(reason); this.telemetry.refresh();
++    try { await this.#backend.json("/v1/power-tool/stop", {}, AbortSignal.timeout(5000)); }
++    finally { await this.skills.stop(reason); this.telemetry.refresh(); }
+   };
+   readonly recover = async ({ reason, restart }: RobotRecoveryRequest): Promise<JsonObject> => {
+     this.#maintenance = true;
+     try {
++      await this.#backend.json("/v1/power-tool/stop", {}, AbortSignal.timeout(5000));
+       const draining = this.skills.stop(reason);
+       if (restart) {
+         // Simulation reset may deliberately terminate an irrecoverable body.
+@@ -381,7 +402,9 @@ export default class NativeG1SimPlatform extends Service {
+   readonly dispose = async (): Promise<void> => {
+     if (this.#disposed) return; this.#disposed = true;
+     if (this.#timer) clearInterval(this.#timer);
+-    await this.skills.stop("Native simulator plugin disposed");
++    try { await this.#backend.json("/v1/power-tool/stop", {}, AbortSignal.timeout(5000)); } finally {
++      await this.skills.stop("Native simulator plugin disposed");
++    }
+     this.#controller.abort(); this.execution.dispose(); this.telemetry.close(); await this.#backend.close();
+   };
+ }
+diff --git a/playground/tools/vla_isaac/docker/serve_unified_scene.py b/playground/tools/vla_isaac/docker/serve_unified_scene.py
+index 7820dbd..4238977 100644
+--- a/playground/tools/vla_isaac/docker/serve_unified_scene.py
++++ b/playground/tools/vla_isaac/docker/serve_unified_scene.py
+@@ -159,6 +159,110 @@ def save_json(path, value):
+     temporary.replace(path)
+ 
+ 
++def configure_wrist_tool(cfg, scene_path):
++    """Optional explicit scene-authored fixed wrist tool, composed before PhysX.
++
++    Keeps the controller's robot articulation unchanged. The tool retains its
++    own articulation; an excluded fixed joint carries its loads to the wrist.
++    No per-step pose writes or simulated grasp are used.
++    """
++    if not scene_path:
++        return
++    from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
++    source = Usd.Stage.Open(str(scene_path))
++    root = source.GetDefaultPrim()
++    controller_dir = root.GetAttribute("envcreator:controllerModelDirectory").Get()
++    if controller_dir:
++        directory = Path(controller_dir).resolve()
++        if not directory.is_relative_to(Path("/runtime-cache")) or not (directory / "g1_29dof_with_hand.urdf").is_file():
++            raise ValueError("Declared controller resource directory is unavailable")
++        from isaaclab_arena_g1.g1_whole_body_controller.wbc_policy.utils import g1 as model_resources
++        from isaaclab_arena_g1.g1_whole_body_controller.wbc_policy.policy import g1_homie_policy
++        remote = model_resources.ISAACLAB_NUCLEUS_DIR + "/Arena/wbc_policy/robot_model/g1/"
++        original_retrieve = model_resources.retrieve_file_path
++
++        def retrieve_controller_resource(path, *args, **kwargs):
++            if path == remote:
++                return str(directory)
++            if path == remote + "g1_29dof_with_hand.urdf":
++                return str(directory / "g1_29dof_with_hand.urdf")
++            for name in ("stand.onnx", "walk.onnx"):
++                if path == model_resources.ISAACLAB_NUCLEUS_DIR + "/Arena/wbc_policy/models/homie_v2/" + name:
++                    local = directory / name
++                    if not local.is_file():
++                        raise ValueError("Declared local Homie model is unavailable: " + name)
++                    return str(local)
++            return original_retrieve(path, *args, **kwargs)
++
++        model_resources.retrieve_file_path = retrieve_controller_resource
++        g1_homie_policy.retrieve_file_path = retrieve_controller_resource
++    robot_asset = root.GetAttribute("envcreator:robotAsset").Get()
++    if robot_asset:
++        if not robot_asset.resolvedPath or not Path(robot_asset.resolvedPath).resolve().is_relative_to(Path(scene_path).resolve().parent):
++            raise ValueError("Declared robot asset must resolve inside the scene package")
++        cfg.scene.robot.spawn.usd_path = robot_asset.resolvedPath
++    value = root.GetAttribute("envcreator:wristTool").Get()
++    if not value:
++        return
++    spec = json.loads(value)
++    if spec.get("schema") != "envcreator.wrist-tool.v1" or spec.get("robot_link") != "right_wrist_yaw_link":
++        raise ValueError("Unsupported explicit wrist tool mount")
++    asset = root.GetAttribute("envcreator:wristToolAsset").Get()
++    if not asset or not asset.resolvedPath:
++        raise ValueError("Wrist tool asset must resolve inside the scene package")
++    asset_path = str(Path(asset.resolvedPath).resolve())
++    if not Path(asset_path).is_relative_to(Path(scene_path).resolve().parent):
++        raise ValueError("Wrist tool must be inside the mounted scene package")
++    mechanics_enabled = bool(root.GetAttribute("envcreator:nativeScrewMechanics").Get())
++    original_spawn = cfg.scene.robot.spawn.func
++
++    def spawn_with_tool(prim_path, spawn_cfg, *args, **kwargs):
++        robot = original_spawn(prim_path, spawn_cfg, *args, **kwargs)
++        import omni.usd
++        stage = omni.usd.get_context().get_stage()
++        wrist = stage.GetPrimAtPath(str(robot.GetPath()) + "/" + spec["robot_link"])
++        if not wrist:
++            raise ValueError("Wrist tool requires the declared loaded robot link")
++        tool = UsdGeom.Xform.Define(stage, "/World/WristTool")
++        tool.GetPrim().GetReferences().AddReference(asset_path)
++        if mechanics_enabled:
++            # Author exclusions before PhysX parses the scene; the coupling replaces contact.
++            for body in ("housing", "spindle"):
++                UsdPhysics.FilteredPairsAPI.Apply(stage.GetPrimAtPath("/World/WristTool/" + body)).CreateFilteredPairsRel().AddTarget(Sdf.Path(BACKGROUND_PATH + "/TargetScrew"))
++        q = spec["mount_rotation_wxyz"]
++        rotation = Gf.Quatd(q[0], Gf.Vec3d(*q[1:]))
++        local = Gf.Matrix4d().SetRotate(rotation)
++        local.SetTranslateOnly(Gf.Vec3d(*spec["mount_position_m"]))
++        world = local * UsdGeom.Xformable(wrist).ComputeLocalToWorldTransform(0)
++        tool.ClearXformOpOrder()
++        tool.AddTransformOp().Set(world)
++        housing = stage.GetPrimAtPath("/World/WristTool/" + spec["tool_body"])
++        if not housing or not housing.HasAPI(UsdPhysics.RigidBodyAPI):
++            raise ValueError("Wrist tool housing is not a rigid body")
++        joint = UsdPhysics.FixedJoint.Define(stage, "/World/WristToolMount")
++        joint.CreateBody0Rel().SetTargets([wrist.GetPath()])
++        joint.CreateBody1Rel().SetTargets([housing.GetPath()])
++        joint.CreateLocalPos0Attr(Gf.Vec3f(*spec["mount_position_m"]))
++        joint.CreateLocalRot0Attr(Gf.Quatf(q[0], Gf.Vec3f(*q[1:])))
++        joint.CreateLocalPos1Attr(Gf.Vec3f(0))
++        joint.CreateLocalRot1Attr(Gf.Quatf(1))
++        joint.CreateExcludeFromArticulationAttr(True)
++        joint.CreateCollisionEnabledAttr(False)
++        if spec.get("hide_right_hand"):
++            for prim in Usd.PrimRange(robot):
++                name = prim.GetName()
++                hand = name.startswith("right_hand_") or name == "right_rubber_hand"
++                wrist_shapes = prim.GetParent() == wrist and name in {"visuals", "collisions"}
++                if hand or wrist_shapes:
++                    UsdGeom.Imageable(prim).MakeInvisible()
++                    for child in Usd.PrimRange(prim):
++                        if child.HasAPI(UsdPhysics.CollisionAPI):
++                            UsdPhysics.CollisionAPI(child).CreateCollisionEnabledAttr(False)
++        return robot
++
++    cfg.scene.robot.spawn.func = spawn_with_tool
++
++
+ def make_environment(args, arena_args):
+     import gymnasium as gym
+     from isaaclab.assets import AssetBaseCfg
+@@ -180,6 +284,14 @@ def make_environment(args, arena_args):
+     builder = ArenaEnvBuilder(environment, arena_args)
+     name, cfg = builder.build_registered()
+     cfg.sim.device = "cpu"
++    from pxr import Usd
++    mechanics_enabled = False
++    if args.scene_usd:
++        source_stage = Usd.Stage.Open(args.scene_usd)
++        mechanics_enabled = bool(source_stage.GetDefaultPrim().GetAttribute("envcreator:nativeScrewMechanics").Get())
++    if mechanics_enabled:
++        cfg.sim.dt = .001
++        cfg.decimation = 20  # Preserve the existing native 50 Hz robot interface.
+     # Fabric-backed environment joint measurements use PhysX tensors, not USD
+     # drive targets. Neither task success nor automatic reset terms exist.
+     cfg.seed, cfg.scene.num_envs = args.seed, 1
+@@ -212,6 +324,7 @@ def make_environment(args, arena_args):
+     if getattr(args, "controller", "homie_v2") == "sonic":
+         from sonic_action import configure_sonic
+         configure_sonic(cfg, args.sonic_model_dir, args.seed)
++    configure_wrist_tool(cfg, args.scene_usd)
+     env = gym.make(name, cfg=cfg)
+     env.unwrapped.clawspine_scene_metadata = {"objects": objects, "contacts": contacts, "sourceIdentity": source_identity,
+         "backgroundUsd": assets[0].usd_path}
+@@ -271,7 +384,9 @@ class SceneMeasurements:
+                     joint = UsdPhysics.Joint(child)
+                     revolute = child.IsA(UsdPhysics.RevoluteJoint)
+                     limits = [child.GetAttribute("physics:" + key).Get() for key in ("lowerLimit", "upperLimit")]
+-                    limits = [math.radians(value) if revolute else value for value in limits]
++                    # Continuous joints author +/-inf; JSON uses null for no bound.
++                    limits = [None if value is None or not math.isfinite(value)
++                              else math.radians(value) if revolute else value for value in limits]
+                     authored[child.GetName()] = {"id": str(child.GetPath()), "path": str(child.GetPath()), "name": child.GetName(),
+                         "type": "revolute" if revolute else "prismatic", "unit": "rad" if revolute else "m",
+                         "lower": limits[0], "upper": limits[1], "bodies": [[str(p) for p in relation.GetTargets()]
+@@ -295,6 +410,30 @@ class SceneMeasurements:
+                 "boundsSource": "initial-composed-AABB-transported-by-live-rigid-pose; conservative-not-interior-or-reachability", "joints": []}
+         self.robot_model = robot_model_metadata(self.stage, base.scene["robot"])
+         self.contacts = base.clawspine_scene_metadata["contacts"]
++        self.wrist_tool = None
++        mount = self.stage.GetPrimAtPath("/World/WristToolMount")
++        if mount:
++            self.wrist_tool = self.tensor_view.create_rigid_body_view("/World/WristTool/housing")
++            if self.wrist_tool.count != 1:
++                raise RuntimeError("Mounted tool has no unique live housing body")
++
++    def measure_wrist_tool(self):
++        if self.wrist_tool is None:
++            return None
++        from pxr import Gf
++        robot = self.base.scene["robot"]
++        index = robot.body_names.index("right_wrist_yaw_link")
++        wrist_p = finite_list(robot.data.body_pos_w[0, index])
++        wrist_q = finite_list(robot.data.body_quat_w[0, index])
++        transform = finite_list(self.wrist_tool.get_transforms()[0])
++        joint = self.physics.FixedJoint(self.stage.GetPrimAtPath("/World/WristToolMount"))
++        rotation = Gf.Rotation(Gf.Quatd(wrist_q[0], Gf.Vec3d(*wrist_q[1:])))
++        expected = Gf.Vec3d(*wrist_p) + rotation.TransformDir(Gf.Vec3d(*joint.GetLocalPos0Attr().Get()))
++        error = (Gf.Vec3d(*transform[:3]) - expected).GetLength()
++        return {"attachment": "excluded-fixed-joint-not-grasp", "housingPositionWorldM": transform[:3],
++                "wristPositionWorldM": wrist_p, "anchorErrorM": error,
++                "housingVelocityWorld": finite_list(self.wrist_tool.get_velocities()[0]),
++                "source": "live-PhysX-housing-and-robot-body-state"}
+ 
+     def measure_objects(self):
+         result = {}
+@@ -444,6 +583,8 @@ class Recorder:
+                 "phase": state.phase, "pose": pose(robot), "bodyPosture": body_posture, "joints": joints, "baseLinearVelocity": vector(linear),
+                 "baseAngularVelocity": vector(angular), "measurements": measurements, "controlSource": self.control_source,
+                 "sceneJoints": self.scene.measure(), "objects": objects,
++                "wristTool": self.scene.measure_wrist_tool(),
++                "powerTool": deepcopy(state.tool_status),
+                 "kinematics": kinematics if fresh_kinematics else {"refSequence": kinematics["sequence"]}, "contacts": contacts,
+                 "execution": state.status()}
+             state.audit_snapshot = deepcopy(common)
+@@ -602,6 +743,13 @@ def run(args, state, app, arena_args):
+                 finite_list(robot.data.soft_joint_pos_limits[0]), actual_upper_names,
+                 load_experiment_limits(getattr(args, "whole_body_config", None)), controller=controller_name)
+         scene = SceneMeasurements(base)
++        mechanics_root = scene.stage.GetPrimAtPath(BACKGROUND_PATH)
++        mechanics_enabled = bool(mechanics_root.GetAttribute("envcreator:nativeScrewMechanics").Get())
++        mechanics = None
++        if mechanics_enabled:
++            from native_screw_runtime import ScrewRuntime
++            mechanics = ScrewRuntime(scene.stage, state, scene.tensor_view, "/World/WristTool", BACKGROUND_PATH + "/TargetScrew")
++            base.sim.add_physics_callback("envcreator-screw-mechanics", mechanics.before_step)
+         recorder = Recorder(base, state, scene, args, navigation_config)
+         recorder.upper_names = actual_upper_names if whole_body_mode else None
+         base.scene["third_person_cam"].set_world_poses_from_view(torch.tensor([csv_floats(args.observer_eye, 3)], device=base.device), torch.tensor([csv_floats(args.observer_target, 3)], device=base.device))
+@@ -701,7 +849,8 @@ def run(args, state, app, arena_args):
+                     if state.shutdown_requested:
+                         state.closed.set()
+                         continue
+-                    if background_physics_enabled(state.settings, status):
++                    if (background_physics_enabled(state.settings, status) or state.tool_command["enabled"]
++                            or abs(state.tool_status.get("motor", {}).get("measured_rpm", 0)) > .1):
+                         advance_background()
+                     if time.monotonic() - last_render >= render_period:
+                         base.sim.render()
+diff --git a/playground/tools/vla_isaac/vla_isaac/unified_transport.py b/playground/tools/vla_isaac/vla_isaac/unified_transport.py
+index 8e5eafe..caa1891 100644
+--- a/playground/tools/vla_isaac/vla_isaac/unified_transport.py
++++ b/playground/tools/vla_isaac/vla_isaac/unified_transport.py
+@@ -86,6 +86,10 @@ class UnifiedState:
+         self.phase = "authoring"
+         self.shutdown_requested = False
+         self.reflex_registry = None
++        self.tool_available = False
++        self.tool_command = {"enabled": False, "rpm": 0.0, "release": False, "command_id": None}
++        self.tool_status = {"available": False}
++        self.tool_deadline = 0.0
+         self.settings = deepcopy(DEFAULT_SETTINGS)
+         self.settings_file = Path(settings_file) if settings_file else None
+         self._settings_stamp, self._settings_poll = None, -math.inf
+@@ -94,6 +98,36 @@ class UnifiedState:
+         self.log_sampler = LogSampler()
+         self.reload_settings(force=True)
+ 
++    def stop_power_tool(self, reason):
++        with self.lock:
++            if self.tool_command["enabled"]:
++                self.event("power-tool-stopped", reason=reason)
++            self.tool_command.update(enabled=False, rpm=0.0)
++            self.tool_deadline = 0.0
++
++    def command_power_tool(self, body):
++        with self.lock:
++            if not self.tool_available:
++                raise RuntimeError("No native power tool mechanics bound")
++            if not isinstance(body, dict) or set(body) - {"enabled", "rpm", "durationMs", "release", "command_id"}:
++                raise ValueError("Unknown motor command fields")
++            enabled = body.get("enabled")
++            rpm = body.get("rpm", 0.0)
++            duration = body.get("durationMs", 10000)
++            release = body.get("release", False)
++            if (type(enabled) is not bool or not finite(rpm) or abs(rpm) > 30
++                    or type(duration) is not int or not 1 <= duration <= 30000 or type(release) is not bool):
++                raise ValueError("Motor needs enabled bool, finite +/-30 rpm and duration 1..30000 ms")
++            identity = body.get("command_id")
++            if not isinstance(identity, str) or not 1 <= len(identity) <= 128:
++                raise ValueError("Motor command requires a bounded invocation identity")
++            self.tool_command = {"enabled": enabled, "rpm": rpm if enabled else 0.0,
++                                 "release": release, "command_id": identity}
++            self.tool_deadline = self.clock() + duration / 1000 if enabled else 0.0
++            self.event("power-tool-command", **self.tool_command, durationMs=duration)
++            return {"accepted": True, "command": deepcopy(self.tool_command),
++                    "status": deepcopy(self.tool_status), "applied": False}
++
+     def update_settings(self, patch, source="host-http"):
+         with self.lock:
+             value = merge_settings(patch, self.settings)
+@@ -209,6 +243,7 @@ class UnifiedState:
+             raise ValueError("wrong execution identity")
+ 
+     def request_stop(self, reason, outcome="cancelled", hold_mode="measured-hold"):
++        self.stop_power_tool(reason)
+         if hold_mode not in ("measured-hold", "commanded-upper-hold"):
+             raise ValueError("unknown stop hold mode")
+         e = self.execution
+@@ -222,6 +257,8 @@ class UnifiedState:
+ 
+     def tick(self):
+         with self.lock:
++            if self.tool_command["enabled"] and self.clock() >= self.tool_deadline:
++                self.stop_power_tool("motor-command-lease-expired")
+             e = self.execution
+             if e and (e["status"] == "active" or (e["status"] == "stopping" and e.get("holdMode") == "commanded-upper-hold")):
+                 now = self.clock()
+@@ -317,6 +354,8 @@ def start_http(state, token_file, admin_token_file, port):
+                     value = deepcopy(state.snapshot)
+                     value["execution"] = state.status() if state.execution else None
+                     value["streams"] = state.stream_health()
++                elif split.path == "/v1/power-tool":
++                    value = deepcopy(state.tool_status)
+                 elif split.path == "/v1/low-reflexes":
+                     value = state.reflex_registry.list() if state.reflex_registry else {"modules": [], "available": False}
+                 elif split.path == "/v1/settings":
+@@ -384,7 +423,12 @@ def start_http(state, token_file, admin_token_file, port):
+                 if not 1 <= length <= 16384:
+                     raise ValueError("request exceeds bounded payload")
+                 body = json.loads(self.rfile.read(length))
+-                if self.path == "/v1/execute":
++                if self.path == "/v1/power-tool":
++                    result = state.command_power_tool(body)
++                elif self.path == "/v1/power-tool/stop":
++                    state.stop_power_tool("native-human-or-agent-stop")
++                    result = {"stopped": True}
++                elif self.path == "/v1/execute":
+                     result = state.execute(body)
+                 elif self.path == "/v1/control":
+                     result = state.control(body)
+diff --git a/scripts/launch_dsh_sim.mjs b/scripts/launch_dsh_sim.mjs
+index 97f0dc0..e85705d 100644
+--- a/scripts/launch_dsh_sim.mjs
++++ b/scripts/launch_dsh_sim.mjs
+@@ -38,6 +38,9 @@ export function installedDshCommand(args, repository = mainRepo) {
+ }
+ export const unifiedBodyFiles = Object.freeze([
+   'docker/serve_unified_scene.py',
++  'docker/fastener.py',
++  'docker/screwdriving.py',
++  'docker/native_screw_runtime.py',
+   'docker/g1_control_primitives.py',
+   'docker/scene_configuration.py',
+   'docker/robot_observations.py',
+@@ -81,6 +84,7 @@ const usage = `Usage: ACCEPT_EULA=Y CLAWSPINE_DOCKER_SUDO=1 node scripts/launch_
+   [--dsh-credential-env ENV_NAME] (repeatable; names only, DSH child only)
+   [--gpu DEVICE_OR_UUID] [--render-gpu INDEX]
+   [--runtime-backend docker|process] [--isaac-python EXECUTABLE]
++  [--arena-image-id sha256:LOCAL_BUILT_IMAGE_ID]
+   [--camera-config RIG_JSON]
+   [--navigation-config CONTROLLER_JSON]
+   [--controller homie_v2|sonic] [--sonic-model-dir DEPLOY_DIRECTORY]
+@@ -112,12 +116,18 @@ Only provider settings are seeded; native credentials are shared, sessions/Web a
+ --provider-dsh-home selects another source; --no-inherit-providers disables home inheritance.
+ `;
+ 
++export function resolveDeploymentImages(cfg = {}) {
++  if (cfg.arenaImageId && (cfg.runtimeBackend !== 'docker' || !/^sha256:[0-9a-f]{64}$/.test(cfg.arenaImageId))) throw new Error('--arena-image-id requires an exact local SHA-256 image ID and the Docker backend');
++  return Object.freeze({ ...images, arena: cfg.arenaImageId ?? images.arena });
++}
++
+ export function parseSimOptions(argv) {
+   const cfg = { port: 8889, backendPort: 28561, policyPort: 28557, seed: 42, gpuWaitSeconds: 900, skipBuild: false, prepareOnly: false, controlMode: 'vla', agentMode: 'legacy', webAccess: 'local', trustedHosts: [], browserOpen: 'auto', gpu: '0', runtimeBackend: 'docker', isaacPython: '/isaac-sim/python.sh', controller: 'homie_v2' };
+   const values = { '--scene-usd': 'sceneUsd', '--scene-config': 'sceneConfig', '--scene-id': 'sceneId', '--spawn': 'spawn', '--observer-eye': 'observerEye', '--observer-target': 'observerTarget', '--run-dir': 'runDir', '--port': 'port', '--backend-port': 'backendPort', '--policy-port': 'policyPort', '--seed': 'seed', '--gpu-wait-seconds': 'gpuWaitSeconds', '--control-mode': 'controlMode', '--subscription-dsh-home': 'subscriptionDshHome', '--whole-body-config': 'wholeBodyConfig', '--agent-mode': 'agentMode', '--robot-workspace': 'robotWorkspace', '--resume-dsh-home': 'resumeDshHome', '--resume-session-id': 'resumeSessionId', '--web-access': 'webAccess' };
+   Object.assign(values, { '--model-provider': 'modelProvider', '--model': 'model', '--model-base-url': 'modelBaseURL', '--reasoning-effort': 'reasoningEffort', '--gpu': 'gpu', '--render-gpu': 'renderGpu', '--runtime-backend': 'runtimeBackend', '--isaac-python': 'isaacPython', '--camera-config': 'cameraConfig' });
+   Object.assign(values, { '--controller': 'controller', '--sonic-model-dir': 'sonicModelDir', '--pi05-endpoint': 'pi05Endpoint' });
+   Object.assign(values, { '--navigation-config': 'navigationConfig' });
++  Object.assign(values, { '--arena-image-id': 'arenaImageId' });
+   Object.assign(values, { '--native-extra-patch': 'nativeExtraPatch', '--instructions-file': 'instructionsFile' });
+   const seen = new Set();
+   for (let i = 0; i < argv.length; i++) {
+@@ -167,6 +177,7 @@ export function parseSimOptions(argv) {
+   }
+   if (!/^(?:\d+|GPU-[a-zA-Z0-9-]+)$/.test(cfg.gpu)) throw new Error('Select one GPU index or UUID');
+   if (!['docker', 'process'].includes(cfg.runtimeBackend)) throw new Error('Unknown simulation runtime backend');
++  resolveDeploymentImages(cfg);
+   if (cfg.runtimeBackend === 'process' && cfg.controlMode !== 'whole_body') throw new Error('Process runtime currently implements the native no-VLA deployment');
+   if (cfg.runtimeBackend === 'process' && cfg.renderGpu === undefined) throw new Error('Process runtime needs explicit --render-gpu; CUDA visibility alone does not isolate Vulkan');
+   if (cfg.renderGpu !== undefined && !/^\d+$/.test(cfg.renderGpu)) throw new Error('Render GPU must be a Vulkan device index');
+@@ -304,6 +315,7 @@ export function unifiedSkillsReady(telemetry, directory, robotId, controlMode =
+ }
+ 
+ export async function launchSim(cfg, hooks = {}) {
++  const deploymentImages = resolveDeploymentImages(cfg);
+   const direct = cfg.controlMode === 'whole_body';
+   const native = cfg.agentMode === 'native';
+   const selection = native ? nativeModelSelection(cfg) : undefined;
+@@ -324,7 +336,7 @@ export async function launchSim(cfg, hooks = {}) {
+   for (const folder of ['state', 'snapshot', 'physical', 'actor-auth', 'admin-auth']) mkdirSync(join(runDir, folder), { recursive: true, mode: 0o700 });
+   const actorTokenFile = join(runDir, 'actor-auth', 'actor.token'), adminTokenFile = join(runDir, 'admin-auth', 'admin.token');
+   const actorToken = createBackendToken(actorTokenFile); createBackendToken(adminTokenFile);
+-  let state = { schema: 'clawspine.unified-sim-launch.v1', runId, robotId, runDir, startedAt: new Date().toISOString(), stage: 'preparing', dshVersion: '0.2.1-alpha.1', model: 'deepseek-flash', images,
++  let state = { schema: 'clawspine.unified-sim-launch.v1', runId, robotId, runDir, startedAt: new Date().toISOString(), stage: 'preparing', dshVersion: '0.2.1-alpha.1', model: 'deepseek-flash', images: deploymentImages,
+     scene: { id: cfg.sceneId, source: sceneUsd, sourceKind: cfg.sceneConfig ? 'scene-configuration' : 'usd', sha256: createHash('sha256').update(readFileSync(sceneUsd)).digest('hex'), spawn: cfg.spawn, seed: cfg.seed, observerEye: cfg.observerEye, observerTarget: cfg.observerTarget },
+     physicsDevice: 'cpu', renderingDevice: 'gpu', controlMode: direct ? 'whole_body' : 'vla', controller: cfg.controller ?? 'homie_v2', policy: direct ? 'upper-joint-position-plus-' + (cfg.controller ?? 'homie_v2') : 'unchanged-GR00T-N1.6-G1-Loco-zero-shot', taskJudgeLocation: 'outer-orchestrator', benchmarkAccepted: false,
+     backendPort: cfg.backendPort, policyPort: cfg.policyPort, actorTokenFile, adminTokenFile, agentMode: native ? 'native' : 'legacy', workspace, nativeDefaultSessionId, webNetwork,
+@@ -539,7 +551,7 @@ export async function launchSim(cfg, hooks = {}) {
+       }
+       writePrivateJson(deploymentPath, deployment);
+     }
+-    if (!processBackend) for (const value of direct ? [images.arena] : Object.values(images)) if ((await docker(['image', 'inspect', '--format', '{{.Id}}', value])).trim() !== value) throw new Error('Pinned Docker image mismatch');
++    if (!processBackend) for (const value of direct ? [deploymentImages.arena] : Object.values(deploymentImages)) if ((await docker(['image', 'inspect', '--format', '{{.Id}}', value])).trim() !== value) throw new Error('Pinned Docker image mismatch');
+     save({ gpuIdentity: (await command('nvidia-smi', ['-i', cfg.gpu ?? '0', '--query-gpu=index,uuid,pci.bus_id,name,driver_version', '--format=csv,noheader'])).trim() });
+     const vla = join(playground, 'tools/vla_isaac');
+     snapshotUnifiedBody(vla, join(runDir, 'snapshot'));
+@@ -564,7 +576,7 @@ export async function launchSim(cfg, hooks = {}) {
+     if (!direct) {
+     const modelDir = realpathSync(process.env.CLAWSPINE_GROOT_MODEL_DIR || join(homedir(), '.cache/clawspine/vla/models/groot-n1.6-g1-loco'));
+     await verifyModel(modelDir); await capacity(24000);
+-    policy = await container('policy', images.policy, [...mount(modelDir, '/models/isaaclab_arena/locomanipulation_tutorial/checkpoint-20000'), '--env', 'HF_HUB_OFFLINE=1', '--env', 'TRANSFORMERS_OFFLINE=1'],
++    policy = await container('policy', deploymentImages.policy, [...mount(modelDir, '/models/isaaclab_arena/locomanipulation_tutorial/checkpoint-20000'), '--env', 'HF_HUB_OFFLINE=1', '--env', 'TRANSFORMERS_OFFLINE=1'],
+       ['-m', 'isaaclab_arena.remote_policy.remote_policy_server_runner', '--host', '127.0.0.1', '--port', String(cfg.policyPort), '--policy_type', 'isaaclab_arena_gr00t.policy.gr00t_remote_policy.Gr00tRemoteServerSidePolicy', '--policy_config_yaml_path', 'isaaclab_arena_gr00t/policy/config/g1_locomanip_gr00t_closedloop_config.yaml', '--policy_device', 'cuda']);
+     save({ stage: 'policy-loading' });
+     const nativeProbe = "import sys,zmq\nfrom isaaclab_arena.remote_policy.message_serializer import MessageSerializer\nc=zmq.Context();s=c.socket(zmq.REQ);s.setsockopt(zmq.LINGER,0);s.setsockopt(zmq.RCVTIMEO,1500);s.setsockopt(zmq.SNDTIMEO,1500);s.connect('tcp://127.0.0.1:'+sys.argv[1]);s.send(MessageSerializer.to_bytes({'endpoint':'get_init_info','data':{'requested_action_mode':'chunk'}}));r=MessageSerializer.from_bytes(s.recv());assert r.get('status')=='success' and r.get('config',{}).get('action_dim')==50;s.close();c.term();print('native50Dready')";
+@@ -579,7 +591,7 @@ export async function launchSim(cfg, hooks = {}) {
+     const role = bodyGeneration === 0 ? 'body' : 'body-r' + bodyGeneration;
+     body = runId + '-' + role;
+     bodyTracker.attempted(body, bodyRunId);
+-    return container(role, images.arena, [...mount(sceneRoot, '/scene'), ...mount(join(runDir, 'snapshot/docker'), '/probe'), ...mount(join(runDir, 'snapshot/vla_isaac'), '/modules/vla_isaac'),
++    return container(role, deploymentImages.arena, [...mount(sceneRoot, '/scene'), ...mount(join(runDir, 'snapshot/docker'), '/probe'), ...mount(join(runDir, 'snapshot/vla_isaac'), '/modules/vla_isaac'),
+       ...(native ? mount(workspace, '/agent-workspace', false) : []),
+       ...(nativeSettings ? mount(nativeSettings.directory, '/runtime-settings') : []),
+       ...(cfg.controller === 'sonic' ? mount(realpathSync(cfg.sonicModelDir), '/sonic-models') : []),
+diff --git a/playground/tools/vla_isaac/docker/native_screw_runtime.py b/playground/tools/vla_isaac/docker/native_screw_runtime.py
+new file mode 100644
+index 0000000..73d3722
+--- /dev/null
++++ b/playground/tools/vla_isaac/docker/native_screw_runtime.py
+@@ -0,0 +1,152 @@
++"""Native scene mechanics, not a robot policy. Frozen with the body snapshot.
++
++Reuses the bench's force-only thread and hex models. Every force is applied
++before a PhysX substep; no poses or joint states are written. Magnetic retention
++is an explicit capped compliant force, acquired only after geometric engagement.
++"""
++import json
++import math
++import time
++
++import numpy as np
++
++try:
++    from .fastener import Parameters, ScrewModel
++    from .screwdriving import EngagementParameters, HexEngagement, rotate
++except ImportError:  # Standalone native body snapshot.
++    from fastener import Parameters, ScrewModel
++    from screwdriving import EngagementParameters, HexEngagement, rotate
++
++
++class ScrewRuntime:
++    def __init__(self, stage, state, physics_view, tool_path, screw_path):
++        import torch
++        from pxr import UsdPhysics
++
++        self.torch, self.state = torch, state
++        self.tool_path, self.screw_path = tool_path, screw_path
++        prim = stage.GetPrimAtPath(screw_path)
++        self.spec = json.loads(prim.GetAttribute('envcreator:fastenerSpec').Get())
++        self.origin = np.array(self.spec['origin_world_m'], dtype=float)
++        if self.spec['axis_world'] != [0, 0, 1]:
++            raise ValueError('This thread implementation currently supports a world +Z screw axis')
++        self.model = ScrewModel(Parameters(lead_m=self.spec['lead_m'], engagement_m=self.spec['engagement_m'],
++                                          separation_m=self.spec['separation_m']))
++        self.hex = HexEngagement(EngagementParameters(socket_af_m=self.spec['socket_af_m'],
++                                                    tip_af_m=self.spec['tip_af_m']))
++        self.tool = physics_view.create_articulation_view(tool_path)
++        self.screw = physics_view.create_rigid_body_view(screw_path)
++        if self.tool.count != 1 or self.screw.count != 1:
++            raise ValueError('Mechanics requires unique live tool articulation and screw')
++        self.names = list(self.tool.shared_metatype.link_names)
++        self.spindle = self.names.index('spindle')
++        spec = json.loads(stage.GetPrimAtPath(tool_path).GetAttribute('envcreator:toolSpec').Get())
++        self.tcp = np.array(spec['frames']['tcp']['position_m'])
++        self.dof = list(self.tool.shared_metatype.dof_names).index(spec['motor']['simulation_joint_name'])
++        self.indices = torch.tensor([0], dtype=torch.int32)
++        self.max_torque = .2
++        damping = np.zeros((1, self.tool.max_dofs), dtype=np.float32)
++        damping[0, self.dof] = .05
++        self.tool.set_dof_dampings(self.tensor(damping), self.indices)
++        self.tool.set_dof_stiffnesses(self.tensor(np.zeros_like(damping)), self.indices)
++        self.tool.set_dof_max_forces(self.tensor(np.full_like(damping, self.max_torque)), self.indices)
++        self.magnet = False
++        self.magnet_offset = None
++        self.steps, self.time_s = 0, 0.0
++        self.report = {'available': True, 'motor': {'enabled': False, 'rpm': 0}, 'thread_state': 'clamped'}
++        # Contact is replaced by the declared geometry-gated reciprocal coupling.
++        for name in ('housing', 'spindle'):
++            UsdPhysics.FilteredPairsAPI.Apply(stage.GetPrimAtPath(tool_path + '/' + name)).CreateFilteredPairsRel().AddTarget(prim.GetPath())
++        state.tool_status = self.report
++        state.tool_available = True
++        state.event('tool-mechanics-bound', tool=tool_path, screw=screw_path,
++                    timestep='each native physics substep', magneticRetention='capped 3N spring; geometric engagement required',
++                    robot_grasp=False, pose_writes=False)
++
++    @staticmethod
++    def pose(row):
++        return np.array(row[:3]), np.array([row[6], row[3], row[4], row[5]])
++
++    def tensor(self, value):
++        return self.torch.tensor(np.asarray(value), dtype=self.torch.float32)
++
++    def before_step(self, dt):
++        self.steps += 1
++        self.time_s += dt
++        with self.state.lock:
++            command = dict(self.state.tool_command)
++            if self.state.clock() >= self.state.tool_deadline:
++                self.state.tool_command['enabled'] = False
++                self.state.tool_command['rpm'] = 0.0
++                command = dict(self.state.tool_command)
++            if command.get('release', False):
++                self.magnet = False
++                self.magnet_offset = None
++        transform = self.tool.get_link_transforms()[0].cpu().numpy()
++        velocity = self.tool.get_link_velocities()[0].cpu().numpy()
++        position, q = self.pose(transform[self.spindle])
++        screw_p, screw_q = self.pose(self.screw.get_transforms()[0].cpu().numpy())
++        screw_v = self.screw.get_velocities()[0].cpu().numpy()
++        tcp = position + rotate(q, self.tcp)
++        tcp_v = velocity[self.spindle, :3] + np.cross(velocity[self.spindle, 3:], rotate(q, self.tcp))
++        event = self.model.observe(screw_q, float(screw_p[2] - self.origin[2]))
++        contact = self.hex.step(tcp, q, velocity[self.spindle, 3:], screw_p, screw_q, screw_v[3:])
++        if event:
++            self.state.event('fastener-transition', **event, physicsStep=self.steps)
++        if contact['event']:
++            self.state.event('hex-engagement', transition=contact['event'], physicsStep=self.steps)
++        force, torque, metrics = self.model.forces(screw_p - self.origin, screw_v[:3], screw_v[3:],
++                                                  contact['transmitted_Nm'], 0.0)
++        force, torque = np.array(force), np.array(torque)
++        # Same tilt restraint as the ideal bench, against an anti-rotated support.
++        if self.model.thread_active:
++            w, x, y, z = screw_q
++            torque[0] += .03 * 2*(y*z-w*x) - .001*screw_v[3]
++            torque[1] -= .03 * 2*(x*z+w*y) + .001*screw_v[4]
++        if contact['engaged'] and not command.get('release', False) and not self.magnet:
++            self.magnet = True
++            self.magnet_offset = screw_p - tcp
++            self.state.event('magnetic-retention-acquired', physicsStep=self.steps, maxForceN=3.0)
++        magnetic_force = np.zeros(3)
++        if self.magnet and not self.model.thread_active:
++            delta = tcp + self.magnet_offset - screw_p
++            if np.linalg.norm(delta) > .015:
++                self.magnet = False
++                self.state.event('magnetic-retention-lost', physicsStep=self.steps)
++            else:
++                magnetic_force = 100 * delta + .3 * (tcp_v - screw_v[:3])
++                norm = np.linalg.norm(magnetic_force)
++                if norm > 3:
++                    magnetic_force *= 3 / norm
++        force += magnetic_force
++        link_forces = np.zeros((1, len(self.names), 3), dtype=np.float32)
++        link_torques = np.zeros_like(link_forces)
++        link_forces[0, self.spindle] = -magnetic_force
++        # Equal opposite wrench at the TCP, transported to the spindle origin.
++        link_torques[0, self.spindle] = (contact['torque_to_tool_world_Nm']
++            + np.cross(tcp - position, -magnetic_force))
++        target = math.tau * command['rpm'] / 60 if command['enabled'] else 0.0
++        omega = float(self.tool.get_dof_velocities()[0, self.dof])
++        # PhysX implicit velocity drive remains stable with the small rotor inertia.
++        # Torque is limited by set_dof_max_forces; this sets a target, never velocity.
++        target_array = np.zeros((1, self.tool.max_dofs), dtype=np.float32)
++        target_array[0, self.dof] = target
++        self.tool.set_dof_velocity_targets(self.tensor(target_array), self.indices)
++        self.tool.apply_forces_and_torques_at_position(self.tensor(link_forces), self.tensor(link_torques), None, self.indices, True)
++        self.screw.apply_forces_and_torques_at_position(self.tensor([force]), self.tensor([torque]), None, self.indices, True)
++        if self.steps % 20 == 0:
++            status = {'available': True, 'physics_step': self.steps, 'sim_time_s': self.time_s,
++                      'motor': {'enabled': command['enabled'], 'command_rpm': command['rpm'],
++                                'measured_rpm': omega*60/math.tau, 'torque_limit_Nm': self.max_torque, 'drive': 'PhysX implicit velocity drive',
++                                'applied_command_id': command.get('command_id')},
++                      'tcp_world_m': tcp.tolist(), 'tool_axis_world': rotate(q, (0,1,0)).tolist(),
++                      'screw_position_world_m': screw_p.tolist(), 'screw_rotation_rad': self.model.theta,
++                      'screw_exit_m': float(screw_p[2]-self.origin[2]), 'thread_state': self.model.state,
++                      'thread_active': self.model.thread_active, 'magnetic_retention': self.magnet,
++                      'magnetic_force_N': magnetic_force.tolist(), 'engagement': contact,
++                      'thread_metrics': metrics, 'fixed_wrist_not_grasp': True,
++                      'assumptions': 'ideal anti-rotated threaded fixture, no real threads; 3N magnetic retention surrogate'}
++            with self.state.lock:
++                self.state.tool_status = status
++            if self.steps % 100 == 0:
++                self.state.event('tool-mechanics-sample', **status)
+diff --git a/playground/tools/vla_isaac/docker/fastener.py b/playground/tools/vla_isaac/docker/fastener.py
+new file mode 100644
+index 0000000..62be8e7
+--- /dev/null
++++ b/playground/tools/vla_isaac/docker/fastener.py
+@@ -0,0 +1,153 @@
++"""Force-only screw surrogate; no simulator pose writes or model-generated callbacks.
++
++Coordinates are relative to an explicitly fixed, anti-rotated mating part.
++This models a declared hypothesis, not identified hardware or real thread contact.
++"""
++
++import math
++from dataclasses import dataclass
++
++
++@dataclass(frozen=True)
++class Parameters:
++    lead_m: float = 0.0008
++    engagement_m: float = 0.004
++    preload_release_m: float = 0.0004
++    breakaway_Nm: float = 0.002
++    running_Nm: float = 0.0008
++    angular_damping: float = 0.0002
++    coupling_stiffness: float = 2000.0
++    coupling_damping: float = 5.0
++    lateral_stiffness: float = 500.0
++    lateral_damping: float = 2.0
++    separation_m: float = 0.018
++
++    def __post_init__(self):
++        if not all(math.isfinite(v) and v > 0 for v in vars(self).values()):
++            raise ValueError("all mechanics parameters must be finite and positive")
++        if not self.preload_release_m < self.engagement_m < self.separation_m:
++            raise ValueError("preload, disengagement and separation distances must be ordered")
++
++
++class ScrewModel:
++    def __init__(self, parameters):
++        self.p = parameters
++        self.theta = 0.0
++        self.previous_angle = 0.0
++        self.state = "clamped"
++        self.thread_active = True
++
++    def observe(self, quaternion_wxyz, dz):
++        w, x, y, z = quaternion_wxyz
++        angle = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
++        self.theta += math.atan2(
++            math.sin(angle - self.previous_angle), math.cos(angle - self.previous_angle)
++        )
++        self.previous_angle = angle
++        old = self.state
++        h = self.p.lead_m / (2 * math.pi)
++        if self.thread_active:
++            if dz >= self.p.engagement_m and self.theta * h >= self.p.engagement_m - 0.00002:
++                self.thread_active = False
++                self.state = "thread_clear"
++            elif dz >= self.p.preload_release_m:
++                self.state = "loose_threaded"
++            elif self.theta > 0.02:
++                self.state = "loosening"
++        elif dz >= self.p.separation_m:
++            self.state = "removed"
++        return (
++            None
++            if old == self.state
++            else {"from": old, "to": self.state, "theta_rad": self.theta, "dz_m": dz}
++        )
++
++    def forces(
++        self,
++        xyz,
++        velocity,
++        angular_velocity,
++        tool_torque,
++        axial_pull,
++        engaged=True,
++        blocked=False,
++        transverse_pull=0.0,
++    ):
++        p = self.p
++        h = p.lead_m / (2 * math.pi)
++        x, y, dz = xyz
++        vx, vy, vz = velocity
++        omega = angular_velocity[2]
++        applied = tool_torque if engaged and not blocked else 0.0
++        force = [transverse_pull, 0.0, axial_pull]
++        torque = [0.0, 0.0, applied]
++        residual = dz - h * self.theta
++        coupling_force = 0.0
++        resistance = 0.0
++        seat_stop = 0.0
++        if self.thread_active:
++            coupling_force = -p.coupling_stiffness * residual - p.coupling_damping * (
++                vz - h * omega
++            )
++            force[0] += -p.lateral_stiffness * x - p.lateral_damping * vx
++            force[1] += -p.lateral_stiffness * y - p.lateral_damping * vy
++            force[2] += coupling_force
++            drive = applied - h * coupling_force
++            limit = p.breakaway_Nm if self.state in {"clamped", "loosening"} else p.running_Nm
++            if self.theta <= 0.002 and dz <= 0.0002 and drive < 0:
++                # Declared one-way seated stop. Tightening/preload growth is out of scope.
++                seat_stop = -drive
++            elif abs(omega) < 0.01 and abs(drive) <= limit:
++                resistance = -drive
++            else:
++                direction = omega if abs(omega) >= 0.01 else drive
++                resistance = -p.running_Nm * math.copysign(1, direction) - p.angular_damping * omega
++            torque[2] = drive + resistance + seat_stop
++        return (
++            force,
++            torque,
++            {
++                "coupling_residual_m": residual,
++                "coupling_force_N": coupling_force,
++                "thread_reaction_torque_Nm": -h * coupling_force,
++                "resistance_Nm": resistance,
++                "seated_stop_Nm": seat_stop,
++                "transmitted_tool_torque_Nm": applied,
++                "fixture_reaction_force_N": [
++                    -force[0] + transverse_pull,
++                    -force[1],
++                    -coupling_force,
++                ],
++                "fixture_reaction_torque_Nm": -torque[2] + applied,
++            },
++        )
++
++
++def tool_access(tool_radius, corridor_half_width, approach_length, obstacles):
++    """Conservative swept cylindrical tool enclosed by a box, along local +Z.
++
++    Obstacles are axis-aligned bounds in target coordinates. This checks the
++    entire declared straight approach, not robot reachability or a hex fit.
++    """
++    if tool_radius <= 0 or approach_length <= 0 or corridor_half_width <= 0:
++        raise ValueError("tool dimensions must be positive")
++    hits = []
++    for obstacle in obstacles:
++        lo, hi = obstacle["min"], obstacle["max"]
++        if any(a >= b or not math.isfinite(a + b) for a, b in zip(lo, hi)):
++            raise ValueError("invalid obstacle bounds")
++        if (
++            lo[0] < tool_radius
++            and hi[0] > -tool_radius
++            and lo[1] < tool_radius
++            and hi[1] > -tool_radius
++            and lo[2] < approach_length
++            and hi[2] > 0
++        ):
++            hits.append(obstacle["id"])
++    return {
++        "accessible": tool_radius < corridor_half_width and not hits,
++        "obstacle_ids": hits,
++        "method": "continuous conservative swept AABB",
++        "scope": "declared local fixture; not full real-car reachability",
++    }
+diff --git a/playground/tools/vla_isaac/docker/screwdriving.py b/playground/tools/vla_isaac/docker/screwdriving.py
+new file mode 100644
+index 0000000..c62702e
+--- /dev/null
++++ b/playground/tools/vla_isaac/docker/screwdriving.py
+@@ -0,0 +1,97 @@
++"""Geometry-gated, compliant ideal hex engagement with reciprocal tool torque.
++
++This is an explicit substitute for resolved bit/socket contact, not evidence that
++the actual contact mechanics, robot grasp or alignment perception are solved.
++"""
++
++import math
++from dataclasses import dataclass
++
++import numpy as np
++
++
++def rotate(q, vector):
++    q = np.array(q, dtype=float, copy=True)
++    q /= np.linalg.norm(q)
++    v = np.asarray(vector, dtype=float)
++    return v + 2 * np.cross(q[1:], np.cross(q[1:], v) + q[0] * v)
++
++
++def wrap(angle):
++    return math.atan2(math.sin(angle), math.cos(angle))
++
++
++@dataclass(frozen=True)
++class EngagementParameters:
++    tip_af_m: float = .003
++    socket_af_m: float = .0031
++    socket_depth_m: float = .0025
++    radial_tolerance_m: float = .00015
++    angular_tolerance_rad: float = math.radians(3)
++    phase_tolerance_rad: float = math.radians(3)
++    min_insertion_m: float = .0005
++    stiffness_Nm_rad: float = .2
++    damping_Nm_s_rad: float = .0003
++    torque_limit_Nm: float = .02
++
++    def __post_init__(self):
++        if not all(math.isfinite(v) and v > 0 for v in vars(self).values()):
++            raise ValueError("engagement parameters must be finite and positive")
++        if self.min_insertion_m >= self.socket_depth_m:
++            raise ValueError("engagement insertion must be shallower than socket")
++
++
++class HexEngagement:
++    def __init__(self, parameters=EngagementParameters()):
++        self.p = parameters
++        self.engaged = False
++        self.last_relative_yaw = None
++        self.twist = 0.0
++
++    def step(self, tcp, tool_q, tool_omega, face, screw_q, screw_omega):
++        p = self.p
++        normal = rotate(screw_q, (0, 0, 1))
++        direction = rotate(tool_q, (0, 1, 0))
++        delta = np.asarray(tcp) - np.asarray(face)
++        axial = float(delta @ normal)
++        radial = float(np.linalg.norm(delta - axial * normal))
++        tilt = math.acos(float(np.clip(-direction @ normal, -1, 1)))
++        bit_x, screw_x = rotate(tool_q, (1, 0, 0)), rotate(screw_q, (1, 0, 0))
++        bit_x -= normal * (bit_x @ normal)
++        bit_x /= max(np.linalg.norm(bit_x), 1e-12)
++        yaw = math.atan2(float(normal @ np.cross(screw_x, bit_x)), float(screw_x @ bit_x))
++        phase = wrap(yaw * 6) / 6
++        reasons = []
++        # Fit clearance also constrains admissible lateral offset. A loose socket
++        # cannot be made usable by merely increasing the position tolerance.
++        clearance = (p.socket_af_m - p.tip_af_m) / 2
++        if not 0 < clearance <= .0001:
++            reasons.append("bit_socket_size_mismatch")
++        if radial > min(p.radial_tolerance_m, max(0, clearance)):
++            reasons.append("radial_misalignment")
++        if tilt > p.angular_tolerance_rad:
++            reasons.append("axis_misalignment")
++        if not p.min_insertion_m <= -axial <= p.socket_depth_m:
++            reasons.append("not_inserted_or_bottomed_out")
++        if not self.engaged and abs(phase) > p.phase_tolerance_rad:
++            reasons.append("hex_phase_misalignment")
++        previous = self.engaged
++        self.engaged = not reasons
++        if self.engaged:
++            if not previous:
++                self.twist = 0.0
++            else:
++                self.twist += wrap(yaw - self.last_relative_yaw)
++            relative_speed = float((np.asarray(tool_omega) - np.asarray(screw_omega)) @ normal)
++            torque = float(np.clip(p.stiffness_Nm_rad * self.twist + p.damping_Nm_s_rad * relative_speed,
++                                   -p.torque_limit_Nm, p.torque_limit_Nm))
++        else:
++            self.twist = 0.0
++            torque = 0.0
++        self.last_relative_yaw = yaw
++        wrench = normal * torque
++        return {"engaged": self.engaged, "reasons": reasons, "radial_error_m": radial,
++                "axis_error_rad": tilt, "insertion_m": -axial, "hex_phase_error_rad": phase,
++                "twist_rad": self.twist, "torque_to_screw_world_Nm": wrench.tolist(),
++                "torque_to_tool_world_Nm": (-wrench).tolist(), "transmitted_Nm": torque,
++                "event": "engaged" if self.engaged and not previous else "disengaged" if previous and not self.engaged else None}
+diff --git a/playground/tools/vla_isaac/docker/test_unified_scene.py b/playground/tools/vla_isaac/docker/test_unified_scene.py
+index 17afaee..e9fba57 100644
+--- a/playground/tools/vla_isaac/docker/test_unified_scene.py
++++ b/playground/tools/vla_isaac/docker/test_unified_scene.py
+@@ -35,6 +35,26 @@ class UnifiedContracts(unittest.TestCase):
+         self.state.audit.close()
+         self.tmp.cleanup()
+ 
++    def test_motor_bounds_lease_and_idle_stop(self):
++        cmd = dict(enabled=True, rpm=-30, durationMs=1000, release=False, command_id="native-invocation")
++        with self.assertRaises(RuntimeError):
++            self.state.command_power_tool(cmd)
++        self.state.tool_available = True
++        for patch in ({"rpm": float("nan")}, {"rpm": True}, {"rpm": 31}, {"enabled": 1}, {"durationMs": 30001}, {"command_id": ""}):
++            with self.assertRaises(ValueError):
++                self.state.command_power_tool({**cmd, **patch})
++        ack = self.state.command_power_tool(cmd)
++        self.assertTrue(ack["accepted"])
++        self.assertFalse(ack["applied"])
++        self.assertEqual(self.state.tool_command["command_id"], cmd["command_id"])
++        self.now += 2
++        self.state.tick()
++        self.assertFalse(self.state.tool_command["enabled"])
++        self.state.command_power_tool(cmd)
++        self.state.request_stop("human")
++        self.assertFalse(self.state.tool_command["enabled"])
++        self.assertEqual(self.state.tool_command["rpm"], 0)
++
+     def test_scene_neutral_navigation(self):
+         self.assertEqual(validate_execute(command(0), "g1", 0)["skill"], "navigate")
+         nav, done = navigation_command([0, 0, .75], [1, 0, 0, 0], {"x": 1, "y": 0, "yaw": 0})
+@@ -278,6 +298,18 @@ class UnifiedHttp(unittest.TestCase):
+         return urlopen(Request(self.url + path, headers={"Authorization": "Bearer " + token},
+             data=json.dumps(body).encode() if body is not None else None), timeout=2)
+ 
++    def test_motor_actor_auth_and_stop(self):
++        self.state.tool_available = True
++        cmd = dict(enabled=True, rpm=-20, durationMs=1000, release=False, command_id="native-call")
++        with self.assertRaises(HTTPError) as error:
++            self.request("/v1/power-tool", self.admin, cmd)
++        self.assertEqual(error.exception.code, 401)
++        with self.request("/v1/power-tool", self.actor, cmd) as response:
++            self.assertTrue(json.load(response)["accepted"])
++        with self.request("/v1/power-tool/stop", self.actor, {}):
++            pass
++        self.assertFalse(self.state.tool_command["enabled"])
++
+     def test_actor_cannot_read_private_audit(self):
+         with self.assertRaises(HTTPError) as error:
+             self.request("/v1/audit-snapshot", self.actor)

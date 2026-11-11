@@ -16,7 +16,24 @@ export_mesh = globals()["export_mesh"]
 for solid in parameters["solids"]:
     shape = solid["shape"]
     name = solid["name"]
-    if shape == "hollow_box":
+    if shape == "annulus":
+        n = 64
+        vertices = [(r * math.cos(2 * math.pi * i / n), r * math.sin(2 * math.pi * i / n), z)
+                    for z in (-solid['length_m']/2, solid['length_m']/2)
+                    for r in (solid['radius_m'], solid['inner_radius_m']) for i in range(n)]
+        faces = []
+        for i in range(n):
+            j = (i+1) % n
+            faces.extend([(i, j, 2*n+j, 2*n+i), (n+j, n+i, 3*n+i, 3*n+j),
+                          (j, i, n+i, n+j), (2*n+i, 2*n+j, 3*n+j, 3*n+i)])
+        mesh = bpy.data.meshes.new(name + '_mesh')
+        mesh.from_pydata(vertices, [], faces)
+        mesh.update()
+        obj = bpy.data.objects.new(name, mesh)
+        bpy.context.collection.objects.link(obj)
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+    elif shape == "hollow_box":
         sx, sy, sz = solid["size_m"]
         wall = solid["length_m"]
         bpy.ops.mesh.primitive_cube_add(size=1)
@@ -141,4 +158,5 @@ for solid in parameters["solids"]:
         obj.rotation_mode = "XYZ"
         obj.rotation_euler = solid["rotation_rpy"]
     export_mesh(name, obj, rgba=tuple(solid["rgba"]), part=solid["part"],
+                material_class=solid.get("material_class", "matte_plastic"),
                 preview_translation=parameters["preview_offsets"][solid["part"]])

@@ -386,6 +386,12 @@ class WebEvidenceClient:
         self.policy = policy
         self.transport = transport or PublicHTTPS(policy.dns_resolver)
 
+    def fetch_source(self, identity: ObjectIdentity, url: str, title: str = "") -> SourceRecord:
+        """Fetch a known public reference using the same bounded source policy."""
+        if not self.policy.enabled:
+            raise ValueError("web evidence is disabled")
+        return self._source(identity, (url, title, "direct reference; not a search snippet"))
+
     def _search_url(self, query: str) -> str:
         if self.policy.provider == "duckduckgo":
             base = "https://html.duckduckgo.com/html/"

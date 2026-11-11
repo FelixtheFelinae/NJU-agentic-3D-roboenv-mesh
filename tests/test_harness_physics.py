@@ -301,6 +301,7 @@ def test_runner_rejects_false_success_and_incomplete_runs(tmp_path, mode, expect
     result = run_physics_task(_task(tmp_path, mode, timeout=0.15 if mode == "sleep" else 5))
     assert result.status == "failed"
     assert expected in " ".join(result.issues)
+    assert result.failure_domain == ("unclassified" if mode == "angle-write" else "test_harness")
 
 
 def test_rotary_protocol_requires_a_named_moving_body():

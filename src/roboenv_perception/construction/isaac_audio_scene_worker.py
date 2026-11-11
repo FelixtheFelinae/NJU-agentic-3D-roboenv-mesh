@@ -77,6 +77,13 @@ def run_build(root, output):
     app = launcher.app
     try:
         import isaaclab.sim as sim_utils
+        from roboenv_perception.execution.isaac_runtime import (
+            physx_config,
+            runtime_quaternion,
+            runtime_versions,
+            simulation_config,
+            state_wxyz,
+        )
         import numpy as np
         import torch
         from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
@@ -110,12 +117,12 @@ def run_build(root, output):
 
         dt = 1 / 240
         sim = sim_utils.SimulationContext(
-            sim_utils.SimulationCfg(
+            simulation_config(
                 device="cpu",
                 dt=dt,
                 render_interval=8,
                 enable_scene_query_support=True,
-                physx=sim_utils.PhysxCfg(
+                physx=physx_config(
                     solver_type=1, enable_external_forces_every_iteration=True
                 ),
             )
@@ -147,7 +154,7 @@ def run_build(root, output):
                         ),
                         init_state=ArticulationCfg.InitialStateCfg(
                             pos=tuple(pos),
-                            rot=tuple(rot),
+                            rot=runtime_quaternion(rot),
                             joint_pos={".*lid_hinge": entry.get("opening_rad", 0.0)},
                         ),
                         actuators={},
@@ -161,7 +168,7 @@ def run_build(root, output):
                             usd_path=str(files[asset_id]), activate_contact_sensors=True
                         ),
                         init_state=RigidObjectCfg.InitialStateCfg(
-                            pos=tuple(pos), rot=tuple(rot)
+                            pos=tuple(pos), rot=runtime_quaternion(rot)
                         ),
                     )
                 )
@@ -178,7 +185,7 @@ def run_build(root, output):
                 {
                     "t": (step + 1) * dt,
                     "states": {
-                        name: obj.data.root_state_w[0].cpu().numpy().tolist()
+                        name: state_wxyz(obj.data.root_state_w[0].cpu().numpy()).tolist()
                         for name, obj in objects.items()
                     },
                 }
@@ -215,7 +222,7 @@ def run_build(root, output):
             hinge.update(dt)
 
         final = {
-            name: obj.data.root_state_w[0].cpu().numpy().tolist()
+            name: state_wxyz(obj.data.root_state_w[0].cpu().numpy()).tolist()
             for name, obj in objects.items()
         }
         hinge_angle = float(hinge.data.joint_pos[0, 0])
@@ -276,7 +283,8 @@ def run_build(root, output):
             "scale_source": scene_spec["scale_source"],
             "placement_source": scene_spec["placement_source"],
             "physics_parameters_source": "assumed simulator parameters; not measured",
-            "simulator": "Isaac Sim 5.1 / Isaac Lab 2.3.2; CPU PhysX TGS; dt=1/240",
+            "simulator": "CPU PhysX TGS; dt=1/240",
+            "runtime_versions": runtime_versions(),
             "scope": "Tabletop assembly, settling, push response and passive FreeClip lid hinge. No robot or real-world metrology.",
             "candidate_sources": {
                 asset_id: {
@@ -322,6 +330,12 @@ def run_check(scene, output, record_orbit_seconds=0):
     app = launcher.app
     try:
         import isaaclab.sim as sim_utils
+        from roboenv_perception.execution.isaac_runtime import (
+            physx_config,
+            runtime_versions,
+            simulation_config,
+            state_wxyz,
+        )
         import numpy as np
         import torch
         from isaaclab.assets import (
@@ -335,12 +349,12 @@ def run_check(scene, output, record_orbit_seconds=0):
 
         output.mkdir(parents=True, exist_ok=False)
         sim = sim_utils.SimulationContext(
-            sim_utils.SimulationCfg(
+            simulation_config(
                 device="cpu",
                 dt=1 / 240,
                 render_interval=8,
                 enable_scene_query_support=True,
-                physx=sim_utils.PhysxCfg(
+                physx=physx_config(
                     solver_type=1, enable_external_forces_every_iteration=True
                 ),
             )
@@ -403,7 +417,7 @@ def run_check(scene, output, record_orbit_seconds=0):
             camera.data.output["rgb"][0, ..., :3].cpu().numpy().astype(np.uint8)
         ).save(output / "preview-after-1s.png")
         states = {
-            name: obj.data.root_state_w[0].cpu().numpy().tolist()
+            name: state_wxyz(obj.data.root_state_w[0].cpu().numpy()).tolist()
             for name, obj in objects.items()
         }
         checks = {
@@ -418,6 +432,7 @@ def run_check(scene, output, record_orbit_seconds=0):
             "checks": {name: bool(value) for name, value in checks.items()},
             "states": states,
             "scene_sha256": digest(scene),
+            "runtime_versions": runtime_versions(),
         }
         if record_orbit_seconds:
             fps = 12

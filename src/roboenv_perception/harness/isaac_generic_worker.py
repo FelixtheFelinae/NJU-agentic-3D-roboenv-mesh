@@ -235,6 +235,13 @@ def run(request_path: Path, output: Path) -> int:
         app = AppLauncher(headless=True, device="cpu",
                           kit_args=f"--portable-root {output.parent / 'kit-runtime'}").app
         import isaaclab.sim as sim_utils
+        from roboenv_perception.execution.isaac_runtime import (
+            close_simulation,
+            physx_config,
+            quaternion_wxyz,
+            runtime_versions,
+            simulation_config,
+        )
         import numpy as np
         import omni.usd
         import torch
@@ -326,9 +333,14 @@ def run(request_path: Path, output: Path) -> int:
                     if fixed:
                         fixture_operations.append({"kind": "fixed_base", **fixed})
         dt = float(protocol["dt_s"])
-        sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(
-            device="cpu", dt=dt, render_interval=240,
-            physx=sim_utils.PhysxCfg(solver_type=1, enable_external_forces_every_iteration=True)))
+        # Lab 3 replaces the authored PhysicsScene. With an active session edit
+        # target its deletion cannot remove the root-layer prim. Configure the
+        # simulator in the in-memory root layer, then restore the fixture target.
+        # No layer is saved; exported sources remain hash-bound and unchanged.
+        with Usd.EditContext(stage, stage.GetRootLayer()):
+            sim = sim_utils.SimulationContext(simulation_config(
+                device="cpu", dt=dt, render_interval=240,
+                physx=physx_config(solver_type=1, enable_external_forces_every_iteration=True)))
         control = None
         if family == "rigid":
             asset = RigidObject(RigidObjectCfg(prim_path=physical_prim_path, spawn=None))
@@ -342,7 +354,7 @@ def run(request_path: Path, output: Path) -> int:
             def state():
                 return {
                     "root_position_m": asset.data.root_state_w[0, :3].cpu().numpy().tolist(),
-                    "root_quaternion_wxyz": asset.data.root_state_w[0, 3:7].cpu().numpy().tolist(),
+                    "root_quaternion_wxyz": quaternion_wxyz(asset.data.root_state_w[0, 3:7].cpu().numpy()),
                     "root_velocity_m_s": asset.data.root_state_w[0, 7:10].cpu().numpy().tolist(),
                 }
         else:
@@ -508,6 +520,7 @@ def run(request_path: Path, output: Path) -> int:
                 <= float(protocol["max_baseline_orientation_change_rad"]))
         report = {
             "status": "passed" if all(checks.values()) else "failed",
+            "runtime": {"versions": runtime_versions(), "physics_backend": "physx"},
             "checks": checks,
             "artifact": {"scene_path": str(scene), "scene_sha256": actual_hashes[str(scene)],
                          "source_hashes": actual_hashes},
@@ -552,9 +565,7 @@ def run(request_path: Path, output: Path) -> int:
     finally:
         if app is not None:
             if sim is not None:
-                sim.stop()
-                sim.clear_all_callbacks()
-                sim.clear_instance()
+                close_simulation(sim)
             app.close(wait_for_replicator=False)
 
 

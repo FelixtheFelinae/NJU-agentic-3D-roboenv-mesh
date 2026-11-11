@@ -16,6 +16,10 @@ def run(source, output):
     app = launcher.app
     try:
         import isaaclab.sim as sim_utils
+        from roboenv_perception.execution.isaac_runtime import (
+            simulation_config,
+            state_wxyz,
+        )
         import numpy as np
         import omni.usd
         import torch
@@ -27,7 +31,7 @@ def run(source, output):
         ok = omni.usd.get_context().open_stage(str(scene))
         if not ok:
             raise RuntimeError('USD context could not open portable scene')
-        sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device='cpu', dt=1/240,
+        sim = sim_utils.SimulationContext(simulation_config(device='cpu', dt=1/240,
                                                                   render_interval=240))
         laptop = Articulation(ArticulationCfg(prim_path='/World/Laptop', spawn=None, actuators={}))
         rigid = {n: RigidObject(RigidObjectCfg(prim_path='/World/'+n, spawn=None)) for n in ['Mouse', 'Bottle']}
@@ -39,8 +43,8 @@ def run(source, output):
             for obj in rigid.values():
                 obj.update(1/240)
             rows.append({'hinge_rad': float(laptop.data.joint_pos[0, 0]),
-                         'laptop': laptop.data.root_state_w[0].cpu().numpy().tolist(),
-                         **{n: o.data.root_state_w[0].cpu().numpy().tolist() for n, o in rigid.items()}})
+                         'laptop': state_wxyz(laptop.data.root_state_w[0].cpu().numpy()).tolist(),
+                         **{n: state_wxyz(o.data.root_state_w[0].cpu().numpy()).tolist() for n, o in rigid.items()}})
         q = np.array([r['hinge_rad'] for r in rows])
         expected = json.loads((source.parent/'objects/asset-0002/build-spec.json').read_text())['scene_opening_rad']
         checks = {'fresh_scene_all_states_finite': all(np.isfinite(r[n]).all() for r in rows for n in ['laptop', 'Mouse', 'Bottle']),

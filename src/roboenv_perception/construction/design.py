@@ -5,11 +5,12 @@ from pathlib import Path
 
 from ..io import read_json, relative_file, sha256, write_json
 from ..vlm import make_vlm
+from .assembly_blueprint import AssemblyBlueprint
+from .assembly_design import ASSEMBLY_INSTRUCTION, check_assembly
 from .common import copy_ref, new_run, source_identity, verify_run
 from .contracts import (
     VERSION,
     AssetBrief,
-    Blueprint,
     ConstructionConfig,
     DesignReview,
     Measurements,
@@ -32,7 +33,16 @@ Declare an ideal fixed-ratio coupling only when a linked rotary interaction is r
 and supported by observed motion or a model-applicable source. Its signed ratio needs
 explicit provenance; if the ratio is unknown, leave couplings empty and flag the gap.
 Do not infer a chain, gear, freewheel or measured ratio solely from a bicycle-like shape.
+At the later export stage, uncoupled continuous joints need positive effort_limit and
+velocity_limit (N*m and rad/s). In an assembly DESCRIPTION these may remain unknown;
+never demand export defaults or invent values to pass description selfcheck. Later explicit
+assumptions do not imply that a motor/controller has been implemented.
 Materials describe appearance, not measured friction, density or mass. No invented physics.
+For a fastening/disassembly task, keep fasteners, clamped members and mating nuts/supports
+as separate semantic parts. Hidden mates may be explicit world-knowledge hypotheses with
+alternatives; never label them observed. A fixed rest-pose joint is only a temporary rigid
+approximation and does not verify tightening, preload or removal. Visible fasteners require
+actual aligned passages and bearing faces in the geometry stage, not decorative screw heads.
 Use metres, Z-up, front=+Y in the object's local frame; scene placement is a separate stage.
 Reference evidence using exactly the supplied view ref_id, verified external source ID,
 or measurement identifier. An external source never counts as a human measurement.
@@ -73,6 +83,11 @@ def validate_blueprint_evidence(blueprint, brief, evidence, measurements, extern
     allowed = {v["ref_id"] for v in evidence["views"]}
     allowed.update(measurements)
     allowed.update(external_refs)
+    if isinstance(blueprint, AssemblyBlueprint):
+        checked = check_assembly(blueprint, brief=brief, allowed_refs=allowed)
+        if checked["issues"]:
+            raise ValueError("; ".join(checked["issues"]))
+        allowed.update(e.id for e in blueprint.evidence if e.origin == "prior")
 
     def visit(value):
         if isinstance(value, dict):
@@ -91,7 +106,7 @@ def validate_blueprint_evidence(blueprint, brief, evidence, measurements, extern
             for child in value:
                 visit(child)
 
-    visit(blueprint.model_dump(mode="json"))
+    visit(blueprint.model_dump(mode="json", exclude={"migration"}))
     # Supplied dimensions are authoritative for the overall object's local XYZ axes.
     for axis in ("x", "y", "z"):
         key = f"measurement:{axis}"
@@ -274,7 +289,7 @@ def design_objects(evidence_root: Path, output: Path, config: ConstructionConfig
                         blueprint = infer_model(
                             vlm,
                             f"{asset_id}-blueprint-{revision}",
-                            "Write the engineering blueprint. "
+                            ASSEMBLY_INSTRUCTION + "\nWrite the engineering blueprint. "
                             f"Copy object_id exactly: {json.dumps(entry['object_id'])}; "
                             f"kind MUST be {json.dumps(brief.build_route)} to match intake. "
                             "Do not promote a rigid object to articulated for cosmetic details, "
@@ -283,9 +298,9 @@ def design_objects(evidence_root: Path, output: Path, config: ConstructionConfig
                             "nonempty evidence_refs. Use null with source=unknown when unsupported. "
                             "Copy supplied overall measurements "
                             "exactly. Use null/unknown for ungrounded dimensions. Fixed assets require "
-                            "no artificial joint. Every non-root part needs an explicit joint. "
+                            "no artificial joint. Organizational parents do not require mechanical joints. "
                             "Moving joint axes are in the child's local frame; bounded travel is "
-                            "radians/metres with a rest convention. For declared couplings, name two "
+                            "radians/metres; unknown rest is permitted in descriptions. For declared couplings, name two "
                             "rotary joints and give a finite signed driven/driver ratio with source and "
                             "evidence refs; an assumed ratio remains a simulation assumption. "
                             "Keep uncertainties explicit.\n"
@@ -297,7 +312,7 @@ def design_objects(evidence_root: Path, output: Path, config: ConstructionConfig
                             + "\nRequired revisions:\n"
                             + json.dumps(feedback),
                             images,
-                            Blueprint,
+                            AssemblyBlueprint,
                             folder / "author",
                         )
                         validate_blueprint_evidence(blueprint, brief, evidence, values, web_refs)
@@ -336,6 +351,12 @@ def design_objects(evidence_root: Path, output: Path, config: ConstructionConfig
                         if review.blueprint_sha256 != digest:
                             raise ValueError("self-review does not bind the current blueprint")
                         write_json(folder / "review.json", review.model_dump(mode="json"))
+                        selfcheck = check_assembly(blueprint, brief=brief,
+                            allowed_refs={v["ref_id"] for v in evidence["views"]} | set(values) | web_refs)
+                        selfcheck.update(blueprint_sha256=digest, model_review=review.model_dump(mode="json"))
+                        if review.decision == "REDO":
+                            selfcheck.update(status="needs_revision", issues=review.findings)
+                        write_json(folder / "selfcheck.json", selfcheck)
                         feedback = review.findings
                         if review.decision == "PASS":
                             copy_ref(
@@ -344,6 +365,8 @@ def design_objects(evidence_root: Path, output: Path, config: ConstructionConfig
                                 output,
                                 f"{base}/blueprint.json",
                             )
+                            copy_ref(output, str((folder / "selfcheck.json").relative_to(output)),
+                                     output, f"{base}/selfcheck.json")
                             accepted = True
                             break
                     except (ValueError, KeyError, TypeError) as error:

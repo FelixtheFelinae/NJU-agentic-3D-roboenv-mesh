@@ -22,6 +22,12 @@ def run(source, output, suite='primary'):
     code = 2
     try:
         import isaaclab.sim as sim_utils
+        from roboenv_perception.execution.isaac_runtime import (
+            physx_config,
+            quaternion_wxyz,
+            simulation_config,
+            state_wxyz,
+        )
         import numpy as np
         import omni.usd
         import torch
@@ -43,9 +49,9 @@ def run(source, output, suite='primary'):
         if not omni.usd.get_context().open_stage(str(source/'scene.usda')):
             raise RuntimeError('Cannot open the reviewed scene')
         dt = 1/240
-        sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(
+        sim = sim_utils.SimulationContext(simulation_config(
             device='cpu', dt=dt, render_interval=8,
-            physx=sim_utils.PhysxCfg(solver_type=1, enable_external_forces_every_iteration=True)))
+            physx=physx_config(solver_type=1, enable_external_forces_every_iteration=True)))
         laptop = Articulation(ArticulationCfg(prim_path='/World/Laptop', spawn=None, actuators={}))
         camera = Camera(CameraCfg(prim_path='/World/HingeTestCamera', width=960, height=720,
             data_types=['rgb'], update_period=0, spawn=sim_utils.PinholeCameraCfg(
@@ -84,7 +90,7 @@ def run(source, output, suite='primary'):
                     torque = case['torque_Nm'] if case['force_start'] <= t < case['force_end'] else 0
                     forces = torch.zeros((1, 2, 3), dtype=torch.float32)
                     torques = torch.zeros_like(forces)
-                    w, x, y, z = laptop.data.root_quat_w[0].cpu().numpy()
+                    w, x, y, z = quaternion_wxyz(laptop.data.root_quat_w[0].cpu().numpy())
                     axis = torch.tensor([1-2*(y*y+z*z), 2*(x*y+w*z), 2*(x*z-w*y)], dtype=torch.float32)
                     torques[0, lid_id] = torque*axis
                     torques[0, base_id] = -torque*axis
@@ -95,7 +101,7 @@ def run(source, output, suite='primary'):
                     laptop.update(dt)
                     row = {'t': t+dt, 'q_rad': float(laptop.data.joint_pos[0, 0]),
                            'qd_rad_s': float(laptop.data.joint_vel[0, 0]), 'torque_Nm': torque,
-                           'root_state': laptop.data.root_state_w[0].cpu().numpy().tolist()}
+                           'root_state': state_wxyz(laptop.data.root_state_w[0].cpu().numpy()).tolist()}
                     rows.append(row)
                     if render:
                         camera.update(dt*8, force_recompute=True)

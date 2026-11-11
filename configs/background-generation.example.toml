@@ -1,0 +1,16 @@
+# Install the optional extra plus a CUDA-compatible PyTorch first.
+# Download a pinned SD1.5 Inpainting Diffusers snapshot separately.
+# This path is local; generation never downloads a model or uses API credentials.
+model_path = "/absolute/path/to/sd15-inpainting-snapshot"
+prompt = "A realistic quiet study room with wooden bookshelves, a light wall and a gray tiled floor, natural indoor light, empty foreground, photograph."
+negative_prompt = "laptop, computer, bottle, mouse, tools, people, text, watermark, desk, table"
+width = 768
+height = 512
+padding_fraction = 0.15
+seam_pixels = 8
+steps = 30
+guidance_scale = 7.5
+seed = 42
+device = "cuda"
+cpu_offload = false
+timeout_seconds = 600

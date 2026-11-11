@@ -151,6 +151,12 @@ def run(job, output, gui=False, g1_reference=None):
     exit_code = 1
     try:
         import isaaclab.sim as sim_utils
+        from roboenv_perception.execution.isaac_runtime import (
+            physx_config,
+            runtime_versions,
+            simulation_config,
+            state_wxyz,
+        )
         import numpy as np
         import torch
         from isaaclab.assets import RigidObject, RigidObjectCfg
@@ -169,9 +175,9 @@ def run(job, output, gui=False, g1_reference=None):
         shutil.copyfile(job / "asset/table.png", output / "asset/table.png")
         asset_path = export_asset(output, geometry, spec)
         dt = spec["dt_seconds"]
-        sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(
+        sim = sim_utils.SimulationContext(simulation_config(
             device="cpu", dt=dt, render_interval=8, enable_scene_query_support=True,
-            physx=sim_utils.PhysxCfg(solver_type=1, enable_external_forces_every_iteration=True),
+            physx=physx_config(solver_type=1, enable_external_forces_every_iteration=True),
         ))
         table = sim_utils.UsdFileCfg(usd_path=str(asset_path))
         table.func("/World/Table", table, translation=tuple(geometry["position_world_m"]))
@@ -244,6 +250,7 @@ def run(job, output, gui=False, g1_reference=None):
             str(output / "contact-preview.mp4"),
         ], stdin=subprocess.PIPE)
         rows = []
+        rgb_spatial_std = []
         low_start = low_end = high_start = high_end = None
         try:
             for step in range(round(4/dt)):
@@ -259,7 +266,7 @@ def run(job, output, gui=False, g1_reference=None):
                 for probe in probes:
                     probe.update(dt)
                 contacts.update(dt)
-                states = np.stack([p.data.root_state_w[0].cpu().numpy() for p in probes])
+                states = np.stack([state_wxyz(p.data.root_state_w[0].cpu().numpy()) for p in probes])
                 fz = contacts.data.net_forces_w[0, :, 2].cpu().numpy()
                 rows.append({"t": time+dt, "states": states.tolist(), "contact_fz": fz.tolist(), "push_N": force})
                 if step == round(2/dt)-1:
@@ -271,6 +278,9 @@ def run(job, output, gui=False, g1_reference=None):
                 if render:
                     camera.update(dt*8, force_recompute=True)
                     rgb = camera.data.output["rgb"][0, ..., :3].cpu().numpy().astype(np.uint8)
+                    # Inspect sensor pixels before adding the caption: a failed
+                    # renderer can still return black frames while physics passes.
+                    rgb_spatial_std.append(float(rgb.std(axis=(0, 1)).mean()))
                     image = Image.fromarray(rgb)
                     draw = ImageDraw.Draw(image)
                     phase = "DROP / SETTLE" if time < 2 else ("LOW FORCE / HOLD" if time < 2.5 else ("HIGH FORCE / SLIDE" if time < 2.65 else "SETTLE AGAIN"))
@@ -296,6 +306,7 @@ def run(job, output, gui=False, g1_reference=None):
         high_motion = float(np.linalg.norm(high_end[:2]-high_start[:2]))
         exported_stage = Usd.Stage.Open(str(asset_path))
         checks = {
+            "camera_rgb_has_scene_content": bool(rgb_spatial_std and min(rgb_spatial_std) > 5),
             "all_states_finite": bool(np.isfinite(np.asarray([r["states"] for r in rows])).all()),
             "all_nine_bottoms_on_table_within_2mm": bool((np.abs(bottom_error) < 0.002).all()),
             "all_nine_have_persistent_contact": bool((final_fz > 0.5*0.1*9.81).all()),
@@ -310,10 +321,12 @@ def run(job, output, gui=False, g1_reference=None):
             "status": "passed" if all(checks.values()) else "failed", "checks": checks,
             "bottom_error_m": bottom_error.tolist(), "mean_final_contact_fz_N": final_fz.tolist(),
             "low_force_displacement_m": low_drift, "high_force_displacement_m": high_motion,
+            "camera_rgb_spatial_std_range": [min(rgb_spatial_std), max(rgb_spatial_std)] if rgb_spatial_std else None,
             "final_linear_speed_m_s": np.linalg.norm(final[:, 7:10], axis=1).tolist(),
             "parameters": spec, "geometry": geometry, "job_source": source_identity(job),
             "probe_mass_kg": 0.1, "probe_size_m": 0.04,
-            "simulator": "Isaac Sim 5.1 / Isaac Lab 2.3.2 / CPU PhysX TGS; RTX rendering",
+            "simulator": "CPU PhysX TGS; RTX rendering",
+            "runtime_versions": runtime_versions(),
             "scope": "Configured collider contact sanity; no real-world calibration or robot controller validation",
             "independent_review": False, "real_world_accuracy": None,
             "g1_role": "static visual reference" if g1_reference else "not_spawned",

@@ -1,4 +1,4 @@
-"""Import Artisan candidates, adapt to PhysX 5.1, validate the actual final USD."""
+"""Import Artisan candidates, adapt to PhysX, validate the actual final USD."""
 
 import argparse
 import hashlib
@@ -36,7 +36,7 @@ def adapt_asset(source, destination, spec):
                     if targets:
                         rel.SetTargets([Sdf.Path(str(t).replace(old, new)) for t in targets])
         joint = next(p for p in stage.Traverse() if p.IsA(UsdPhysics.RevoluteJoint))
-        # Native PhysX 5.1 joint-axis friction. USD angular rates use degrees/s,
+        # Native PhysX joint-axis friction. USD angular rates use degrees/s,
         # so convert the intended .03 Nm*s/rad viscous coefficient at the boundary.
         joint.AddAppliedSchema('PhysxJointAxisAPI:angular')
         for name, value in [('staticFrictionEffort', .55), ('dynamicFrictionEffort', .42),
@@ -136,6 +136,13 @@ def run(root, output):
     exit_code = 2
     try:
         import isaaclab.sim as sim_utils
+        from roboenv_perception.execution.isaac_runtime import (
+            physx_config,
+            runtime_quaternion,
+            runtime_versions,
+            simulation_config,
+            state_wxyz,
+        )
         import numpy as np
         import torch
         from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
@@ -153,12 +160,15 @@ def run(root, output):
         torch.set_num_threads(4)
         output.mkdir(parents=True, exist_ok=False)
         scene_spec = json.loads((root/'scene-build-spec.json').read_text())
-        table_plane = json.loads((root.parent/'user-video-table-20261023/table-plane.json').read_text())
+        table_source = (root/scene_spec['table_source_ref']).resolve() if scene_spec.get('table_source_ref') else root.parent/'user-video-table-20261023'
+        if scene_spec.get('table_source_ref') and not table_source.is_relative_to(root):
+            raise ValueError('table source must be inside the input bundle')
+        table_plane = json.loads((table_source/'table-plane.json').read_text())
         table_spec = TableSimulationSpec(width_m=scene_spec['table_width_m'], width_source='estimated',
                                          width_evidence='14-inch MBP catalog width + two-view physical corner fit')
         geometry = tabletop_geometry(table_plane, table_spec)
         (output/'asset').mkdir()
-        shutil.copyfile(root.parent/'user-video-table-20261023/assets/simple/table.png', output/'asset/table.png')
+        shutil.copyfile(table_source/'assets/simple/table.png', output/'asset/table.png')
         table_path = export_asset(output, geometry, table_spec.model_dump())
         specs, files = {}, {}
         for asset, name in [('asset-0001', 'Bottle'), ('asset-0002', 'Laptop'), ('asset-0003', 'Mouse')]:
@@ -168,9 +178,9 @@ def run(root, output):
             adapt_asset(work/'export/object.usd', files[name], specs[name])
 
         dt = 1/240
-        sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(
+        sim = sim_utils.SimulationContext(simulation_config(
             device='cpu', dt=dt, render_interval=8, enable_scene_query_support=True,
-            physx=sim_utils.PhysxCfg(solver_type=1, enable_external_forces_every_iteration=True)))
+            physx=physx_config(solver_type=1, enable_external_forces_every_iteration=True)))
         table = sim_utils.UsdFileCfg(usd_path=str(table_path))
         table.func('/World/Table', table, translation=tuple(geometry['position_world_m']))
         floor = sim_utils.CuboidCfg(size=(3, 3, .05),
@@ -198,13 +208,13 @@ def run(root, output):
                 xyz = [*xyz[:2], xyz[2]+.008]
                 obj = Articulation(ArticulationCfg(
                     prim_path='/World/Laptop', spawn=sim_utils.UsdFileCfg(usd_path=str(files[name]), activate_contact_sensors=True),
-                    init_state=ArticulationCfg.InitialStateCfg(pos=tuple(xyz), rot=tuple(quat),
+                    init_state=ArticulationCfg.InitialStateCfg(pos=tuple(xyz), rot=runtime_quaternion(quat),
                         joint_pos={'.*lid_hinge': spec['scene_opening_rad']}), actuators={}))
             else:
                 xyz = [*xyz[:2], xyz[2]+.02]
                 obj = RigidObject(RigidObjectCfg(
                     prim_path='/World/'+name, spawn=sim_utils.UsdFileCfg(usd_path=str(files[name]), activate_contact_sensors=True),
-                    init_state=RigidObjectCfg.InitialStateCfg(pos=tuple(xyz), rot=tuple(quat))))
+                    init_state=RigidObjectCfg.InitialStateCfg(pos=tuple(xyz), rot=runtime_quaternion(quat))))
             objects[name] = obj
         sensors = {name: ContactSensor(ContactSensorCfg(prim_path=f'/World/{name}/{"base" if name == "Laptop" else "body"}', update_period=0))
                    for name in objects}
@@ -285,7 +295,7 @@ def run(root, output):
                     obj.update(dt)
                 for sensor in sensors.values():
                     sensor.update(dt)
-                states = {n: o.data.root_state_w[0].cpu().numpy().tolist() for n, o in objects.items()}
+                states = {n: state_wxyz(o.data.root_state_w[0].cpu().numpy()).tolist() for n, o in objects.items()}
                 q = float(objects['Laptop'].data.joint_pos[0, 0])
                 fz = {n: float(s.data.net_forces_w[0, :, 2].sum()) for n, s in sensors.items()}
                 rows.append({'t': t+dt, 'states': states, 'hinge_rad': q, 'contact_fz_N': fz})
@@ -362,7 +372,8 @@ def run(root, output):
                                                                   for p in files[n].parent.rglob('*') if p.is_file()}} for n in objects},
                   'table_geometry': geometry, 'scale_source': 'estimated; user-confirmed 14-inch MBP catalog reference',
                   'physics_parameters_source': 'assumed and tested in this simulator, not measured',
-                  'simulator': 'Isaac Sim 5.1 / Isaac Lab 2.3.2; CPU PhysX TGS; dt=1/240; 16/4 iterations',
+                  'simulator': 'CPU PhysX TGS; dt=1/240; 16/4 iterations',
+                  'runtime_versions': runtime_versions(),
                   'scope': 'Rigid body contact and passive hinge sanity. No grasp controller, liquid, cap mechanism or real-world accuracy validation.',
                   'scene_ref': 'scene.usda', 'scene_sha256': digest(output/'scene.usda')}
         (output/'trajectory.json').write_text(json.dumps(rows)+'\n')

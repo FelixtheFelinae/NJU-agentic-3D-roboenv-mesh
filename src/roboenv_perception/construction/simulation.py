@@ -120,7 +120,7 @@ def prepare_table_simulation(table: Path, spec_path: Path, output: Path):
         write_json(output / "job.json", {
             "spec_ref": "spec.json", "geometry_ref": "geometry.json",
             "texture_ref": "asset/table.png", "asset_to_build": "asset/table.usda",
-            "runtime": "Isaac Sim 5.1 / Isaac Lab 2.3",
+            "runtime": "Isaac Sim / Isaac Lab; version recorded by the execution worker",
             "scale_is_measured": spec.width_source == "measured",
             "robot_reachability": "requires separate kinematic check; total height alone is insufficient",
             "physics_validation": "not_run", "independent_accuracy": None,

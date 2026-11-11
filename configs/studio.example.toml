@@ -1,0 +1,22 @@
+# Run from the EnvCreator repository root. Native DSH 0.2.1-alpha.1 / Node 24.
+dsh_root = "/path/to/ClawSpine"
+# Separate DSH gateway credentials; omit for asset browsing without model requests.
+# model_config_path = "configs/local-dsh-model.toml"
+state_root = "outputs/studio"
+import_root = "outputs"
+port = 8890
+max_concurrent = 1
+max_revisions = 3
+max_wall_seconds = 7200
+# 默认仅向 DSH 提供工作流和查询工具；旧组件仅用于显式调试。
+debug_component_tools = false
+physics = true
+web_search = true
+background_mode = "auto"
+# Fill these before using envcreator_generate:
+# perception_config = "configs/local-grounded-sam2.toml"
+# construction_config = "configs/local-user-construction.toml"
+# artisan_python = "/path/to/Artisan/python"
+# blender = "/path/to/blender"
+# isaac_python = "/path/to/isaac/python.sh"
+# env_file = ".env.local" # Passed only to the EnvCreator worker, never DSH.

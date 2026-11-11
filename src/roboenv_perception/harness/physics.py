@@ -21,6 +21,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from ..execution.context import traced
+
 
 class InteractionFamily(str, Enum):
     RIGID = "rigid"
@@ -172,6 +174,7 @@ class PhysicsResult:
     source_hashes: dict[str, str] = field(default_factory=dict)
     worker_exit_code: int | None = None
     shutdown_status: str = "normal"
+    failure_domain: str = "unclassified"
 
     @property
     def passed(self) -> bool:
@@ -183,6 +186,10 @@ def _source_hashes(task: PhysicsTask) -> dict[str, str]:
         raise ValueError("scene_usd must be an existing exported USD file")
     paths = set(_ascii_usd_dependencies(task.scene_usd))
     paths.update(path.resolve() for path in task.dependencies)
+    if task.worker_script is None:
+        # The bundled probe imports version-specific solver configuration.
+        # Bind that executable dependency to the same immutable run evidence.
+        paths.add(Path(__file__).parents[1] / "execution" / "isaac_runtime.py")
     if any(not path.is_file() for path in paths):
         raise ValueError("all declared USD dependencies must exist")
     return {str(path): sha256(path) for path in sorted(paths)}
@@ -357,6 +364,7 @@ def _stop_process_group(process: subprocess.Popen[Any]) -> None:
         process.wait(timeout=10)
 
 
+@traced("Isaac")
 def run_physics_task(task: PhysicsTask) -> PhysicsResult:
     """Launch a configured worker in a fresh directory and audit its report.
 
@@ -452,6 +460,7 @@ def run_physics_task(task: PhysicsTask) -> PhysicsResult:
             report = json.loads(report_path.read_text())
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             issues.append(f"invalid validation.json: {exc}")
+    failure_domain = "test_harness" if issues else "unclassified"
     if report is not None:
         issues.extend(verify_physics_report(task.protocol, scene, source_hashes, report))
     return PhysicsResult(
@@ -459,4 +468,5 @@ def run_physics_task(task: PhysicsTask) -> PhysicsResult:
         tuple(issues), report_path if report_path.is_file() else None, log,
         sha256(report_path) if report_path.is_file() else None, source_hashes, code,
         "terminated_after_report" if shutdown_after_report else "normal",
+        failure_domain,
     )

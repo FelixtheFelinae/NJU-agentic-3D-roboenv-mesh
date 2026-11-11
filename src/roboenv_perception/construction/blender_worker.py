@@ -93,7 +93,8 @@ def run(output):
         material.use_nodes = True
         shader = material.node_tree.nodes.get("Principled BSDF")
         shader.inputs["Base Color"].default_value = rgba
-        shader.inputs["Roughness"].default_value = 0.65
+        shader.inputs["Roughness"].default_value = {"rubber": .9, "steel": .35}.get(material_class, .65)
+        shader.inputs["Metallic"].default_value = 1.0 if material_class == "steel" else 0.0
         rendered = bpy.data.objects.new("export_" + name, data)
         bpy.context.collection.objects.link(rendered)
         rendered.data.materials.clear()

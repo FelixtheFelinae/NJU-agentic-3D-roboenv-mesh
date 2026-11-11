@@ -1,0 +1,59 @@
+{
+  "schema_version": "cart-assembly-experiment/1",
+  "target": "C01_front_beam_screw",
+  "hypothesis_status": "assumed_configuration_not_confirmed_hardware",
+  "source_frames_seconds": [10.0, 17.1, 18.9],
+  "parts": [
+    {"id": "front_beam", "basis": "observed perforated metal beam; dimensions assumed"},
+    {"id": "rear_support", "basis": "visible support behind beam; internal thread assumed"},
+    {"id": "target_screw", "basis": "visible round head at pixel approximately (800,210) in 18.9 s frame; shaft and thread assumed"}
+  ],
+  "connection": {
+    "fastener": "target_screw",
+    "mate": "rear_support",
+    "clamped_parts": ["front_beam"],
+    "model": "screw_into_fixed_threaded_support",
+    "alternatives": ["through_bolt_with_hidden_nut", "different head/tool interface"],
+    "axis": [0, 0, 1],
+    "axis_basis": "experimental local axis normal to reconstructed flange; real-world orientation not calibrated",
+    "handedness": "assumed right-handed; local positive rotation withdraws screw",
+    "unknown": ["actual diameter", "actual pitch", "head recess", "rear nut or tapped hole", "material", "preload", "breakaway torque"]
+  },
+  "tool": {
+    "type": "ideal coaxial hex driver proxy",
+    "radius_m": 0.003,
+    "approach_length_m": 0.06,
+    "basis": "assumed tool envelope, not an identified Allen-key size",
+    "engagement": "explicit ideal torque gate; contact fit/slip unvalidated"
+  },
+  "fixtures": [
+    {"part": "rear_support", "constraint": "fixed to world; absorbs thread reaction"},
+    {"part": "front_beam", "constraint": "fixed to world as local bench; remaining real connections unresolved"}
+  ],
+  "dependencies": {
+    "screw_removal": ["tool_access", "engagement", "relative_rotation", "thread_clear", "actual_separation"],
+    "beam_removal": "unresolved_and_not_tested; removing C01 alone is insufficient"
+  },
+  "mechanics": {
+    "lead_m": 0.0008,
+    "engagement_m": 0.004,
+    "preload_release_m": 0.0004,
+    "breakaway_Nm": 0.002,
+    "running_Nm": 0.0008,
+    "angular_damping": 0.0002,
+    "coupling_stiffness": 2000.0,
+    "coupling_damping": 5.0,
+    "lateral_stiffness": 500.0,
+    "lateral_damping": 2.0,
+    "separation_m": 0.018
+  },
+  "parameter_provenance": "All geometry, mass/inertia and mechanics numbers are frozen experimental assumptions, not measurements or a VEX specification. A one-way seated angular stop prevents further tightening at the initial seat; preload growth and damage are not modeled.",
+  "review_corrections": [
+    "VLM called grey-roller wheels mecanum: evidence does not establish angled roller axes; use roller/omni-style wheel.",
+    "VLM called wheel shaft end a screw: visible projecting shaft may be square; reject this candidate for first test.",
+    "VLM guessed M3/M4 and metric hex sizes: unconfirmed; do not use as a hardware specification.",
+    "VLM assumed hidden nut: retain tapped support and through-bolt alternatives; choose tapped support only for bench hypothesis.",
+    "VLM inferred horizontal world axis: camera is uncalibrated; define explicit local test axis instead."
+  ],
+  "manual_override_interface": "Copy this file, edit declared fields and provenance, rerun into a new output directory; retain original proposal and prior reports. Never edit frozen test thresholds to rescue a candidate."
+}

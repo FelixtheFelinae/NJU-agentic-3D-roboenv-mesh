@@ -20,6 +20,7 @@ from .contracts import (
     Labels,
     PipelineConfig,
 )
+from .execution.context import traced
 from .io import normalize_image, sha256, write_json
 from .masks import (
     clean_detections,
@@ -34,6 +35,7 @@ from .segmentation import make_segmenter
 from .vlm import make_vlm
 
 
+@traced("inventory")
 def stage_inventory(vlm, image_path: Path, task: str | None, stage_dir: Path):
     result = vlm.infer(
         "inventory", inventory_prompt(task), [image_path], Inventory.model_json_schema(), stage_dir
@@ -43,6 +45,7 @@ def stage_inventory(vlm, image_path: Path, task: str | None, stage_dir: Path):
     return inventory
 
 
+@traced("segment")
 def stage_segment(segmenter, image, inventory, config, stage_dir):
     raw, provenance = segmenter.segment(image, inventory)
     write_json(
@@ -93,6 +96,7 @@ def stage_segment(segmenter, image, inventory, config, stage_dir):
     return detections, uncertain, issues, rows
 
 
+@traced("label")
 def stage_labels(vlm, image_path, detections, rows, segment_dir, task, stage_dir):
     # Even an empty segmentation produces a predictable empty stage without API calls.
     if detections:

@@ -234,3 +234,46 @@ def test_failed_repair_retains_previous_visual_candidate_without_physics_pass(tm
         assert row[key] == previous[key]
     assert row["physics_status"] == "not_run"
     assert "repair recipe invalid" in row["repair_issues"][0]
+
+
+@pytest.mark.parametrize('domain,expected_action', [
+    ('object_geometry', 'repair_object_or_binding'),
+    ('instance_binding', 'repair_object_or_binding'),
+    ('unclassified', 'stop_and_record_defect'),
+    ('test_harness', 'stop_and_record_defect'),
+    ('standard_primitive', 'stop_and_record_defect'),
+])
+def test_verify_preserves_explicit_failure_domain_for_repair(tmp_path, monkeypatch, domain, expected_action):
+    import roboenv_perception.harness.physics as physics
+    from roboenv_perception.harness.repair_policy import route_physics_failures
+
+    assets, scene, settings, _, _ = _rigid_disk_fixture(tmp_path)
+    report_path = tmp_path / 'trusted-worker-findings.json'
+    write_json(report_path, {'status': 'failed'})
+    monkeypatch.setattr(physics, 'run_physics_task', lambda task: physics.PhysicsResult(
+        'failed', issues=('explicit attributed failure',), report_path=report_path,
+        failure_domain=domain))
+    output = tmp_path / 'physics-domains'
+    _verify(output, scene, assets, settings)
+    report = read_json(output / 'physics.json')
+    assert report['results'][0]['tests'][0]['failure_domain'] == domain
+    feedback, routes = route_physics_failures(report)
+    assert routes[0]['action'] == expected_action
+    assert bool(feedback) == (expected_action == 'repair_object_or_binding')
+
+
+def test_verify_execution_error_does_not_request_geometry_repair(tmp_path, monkeypatch):
+    import roboenv_perception.harness.physics as physics
+    from roboenv_perception.harness.repair_policy import route_physics_failures
+
+    assets, scene, settings, _, _ = _rigid_disk_fixture(tmp_path)
+
+    def broken(task):
+        raise RuntimeError('runtime unavailable')
+
+    monkeypatch.setattr(physics, 'run_physics_task', broken)
+    output = tmp_path / 'physics-error'
+    _verify(output, scene, assets, settings)
+    report = read_json(output / 'physics.json')
+    assert report['results'][0]['tests'][0]['failure_domain'] == 'test_harness'
+    assert route_physics_failures(report)[0] == {}

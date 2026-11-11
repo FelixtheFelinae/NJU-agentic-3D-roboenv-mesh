@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image
 
 from ..io import read_json, relative_file, sha256, write_json
+from .asset_agents import child_environment
 from .common import cv2_module, new_run, read_mask, source_identity, verify_run
 from .contracts import VERSION, BackgroundConfig
 
@@ -24,7 +25,8 @@ def run_process(argv: list[str], cwd: Path, log: Path, timeout: int):
     try:
         with log.open("w", encoding="utf-8") as stream:
             process = subprocess.Popen(
-                argv, cwd=cwd, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True
+                argv, cwd=cwd, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True,
+                env=child_environment(),
             )
             receipt["pid"] = process.pid
             process.wait(timeout=timeout)
@@ -411,7 +413,7 @@ def estimate_background_cameras(
     return output
 
 
-def train_background(cameras: Path, output: Path, config: BackgroundConfig):
+def train_background(cameras: Path, output: Path, config: BackgroundConfig, *, resume: Path | None = None):
     data = verify_run(cameras, "cameras.json")
     repo = Path(config.gaussian_repo).resolve()
     if not config.gaussian_repo or not (repo / "gaussian_renderer/__init__.py").is_file():
@@ -468,7 +470,7 @@ def train_background(cameras: Path, output: Path, config: BackgroundConfig):
                 str(config.synthetic_weight),
                 "--training-config",
                 str((dataset / "training.json").resolve()),
-            ],
+            ] + (["--resume", str(resume.resolve())] if resume else []),
             output.resolve(),
             output / "logs/training.log",
             config.timeout_seconds,

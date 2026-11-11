@@ -13,20 +13,25 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from ..construction.asset_agents import child_environment, run_artisan
+from ..construction.artisan_backend import child_environment, run_artisan
+from ..construction.assembly_blueprint import AssemblyBlueprint, legacy_projection
 from ..construction.blender_backend import build_blender_meshes
 from ..construction.contracts import Blueprint
 from ..construction.design import infer_model
 from ..contracts import Contract, VLMConfig
+from ..execution.context import traced
 from ..io import read_json, sha256, write_json
 from ..vlm import make_vlm
+from .assembly import ASSEMBLY_PROMPT, AssemblyPlan
 
 
 class Solid(Contract):
     name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
     part: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
     shape: Literal["box", "cylinder", "ellipsoid", "torus", "tube", "hollow_box", "hollow_cylinder",
-                   "prism", "frustum", "hollow_prism", "lathe"]
+                   "prism", "frustum", "hollow_prism", "lathe", "annulus"]
+    assembly_role: Literal["solid", "fastener_head", "fastener_shaft", "washer", "nut"] = "solid"
+    inner_radius_m: float | None = None
     center_m: tuple[float, float, float] = (0.0, 0.0, 0.0)
     rotation_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0)
     size_m: tuple[float, float, float] | None = None
@@ -37,11 +42,18 @@ class Solid(Contract):
     length_m: float | None = None
     tube_end_m: tuple[float, float, float] | None = None
     rgba: tuple[float, float, float, float] = (0.6, 0.6, 0.6, 1.0)
+    material_class: Literal["matte_plastic", "rubber", "steel"] = "matte_plastic"
     source: Literal["observed", "reference", "estimated", "assumed"]
     evidence_refs: list[str] = Field(min_length=1)
 
     @model_validator(mode="after")
     def legal_geometry(self):
+        if self.shape == "annulus":
+            if any(v is None or not math.isfinite(v) or v <= 0
+                   for v in (self.radius_m, self.inner_radius_m, self.length_m)):
+                raise ValueError("annulus requires positive finite outer/inner radii and length")
+            if self.inner_radius_m >= self.radius_m:
+                raise ValueError("annulus bore must be smaller than outer radius")
         coordinates = [*self.center_m, *self.rotation_rpy, *self.rgba]
         if not all(math.isfinite(v) for v in coordinates) or not all(0 <= v <= 1 for v in self.rgba):
             raise ValueError("geometry coordinates and color must be finite")
@@ -97,12 +109,25 @@ class JointPlacement(Contract):
     evidence_refs: list[str] = Field(min_length=1)
 
 
+class InterfaceBinding(Contract):
+    interface_id: str
+    solid: str
+    feature: Literal[
+        "cylinder_outer", "cylinder_inner",
+        "box_x_min", "box_x_max", "box_y_min", "box_y_max", "box_z_min", "box_z_max",
+    ]
+
+
 class GeometryRecipe(Contract):
     object_id: str
     solids: list[Solid] = Field(min_length=1, max_length=48)
     joint_placements: list[JointPlacement] = Field(default_factory=list)
     part_masses_kg: dict[str, float] = Field(default_factory=dict)
     notes: list[str] = Field(default_factory=list)
+    assembly: AssemblyPlan | None = None
+    # Bind semantic interfaces to features of the actual builder solids, not a
+    # second independently authored geometric model.
+    interface_bindings: list[InterfaceBinding] = Field(default_factory=list)
 
     def check_against(self, blueprint: Blueprint, allowed_refs: set[str]):
         if self.object_id != blueprint.object_id:
@@ -113,6 +138,19 @@ class GeometryRecipe(Contract):
         names = [s.name for s in self.solids]
         if len(names) != len(set(names)):
             raise ValueError("solid names must be unique")
+        if self.interface_bindings:
+            if not isinstance(blueprint, AssemblyBlueprint):
+                raise ValueError("interface bindings require the assembly blueprint schema")
+            interfaces = {i.id: i for i in blueprint.interfaces}
+            solids = {s.name: s for s in self.solids}
+            bound = [b.interface_id for b in self.interface_bindings]
+            if len(bound) != len(set(bound)):
+                raise ValueError("duplicate interface binding")
+            for binding in self.interface_bindings:
+                if binding.interface_id not in interfaces or binding.solid not in solids:
+                    raise ValueError("interface binding references an unknown interface/solid")
+                if interfaces[binding.interface_id].part != solids[binding.solid].part:
+                    raise ValueError("interface binding belongs to a different part")
         if {j.joint for j in self.joint_placements} != {j.name for j in blueprint.joints}:
             raise ValueError("each blueprint joint needs exactly one placement")
         if len(self.joint_placements) != len(blueprint.joints):
@@ -175,7 +213,23 @@ GEOMETRY_SYSTEM = (
     "If the blueprint declares an ideal joint coupling, keep both shaft parts and their "
     "clearances; the coupling is authored by Artisan, not by a decorative chain mesh. "
     "Evidence refs must come from the supplied allowed list. Mark inferred dimensions estimated/assumed. "
-    "Assign a provisional mass in kilograms for each physical part; it is not a measurement."
+    "Assign a provisional mass in kilograms for each physical part; it is not a measurement. "
+    "When fasteners are present, provide assembly connections with actual solid names and "
+    "mark head/shaft solids with assembly_role=fastener_head/fastener_shaft. Keep the fastener "
+    "and each clamped/mating member as distinct parts. Use annulus for a through-bored "
+    "washer or simplified nut: radius_m outer, inner_radius_m bore, length_m thickness. "
+    "A hollow_cylinder has a closed bottom and is NOT a through hole. "
+    "For AssemblyBlueprint interfaces, populate interface_bindings: interface_id, actual solid "
+    "name, feature=cylinder_outer/cylinder_inner or box_x_min/box_x_max/box_y_min/box_y_max/"
+    "box_z_min/box_z_max. A hole must bind the inner surface of an actual annulus, never "
+    "a decorative cylinder or independent geometric claim. Bind plane interfaces to actual "
+    "box faces. Unresolved hinge_region cannot be upgraded into recovered shaft-hole contact "
+    "without a revised blueprint hypothesis. Missing/unsupported bindings remain unresolved. "
+    "GeometryRecipe.assembly is a fastener/stack verification plan, not a generic mate graph. "
+    "A laptop revolute hinge alone does not imply a screw/nut, standard_ref or tool engagement. "
+    "For ordinary kinematic hinges with no separately modelled fastener stack, use assembly=null; "
+    "retain joints and interface_bindings, and keep unsupported hinge_region unresolved. "
+    + ASSEMBLY_PROMPT
 )
 
 
@@ -204,7 +258,9 @@ def _image_manifest(evidence: dict, source_images: list[Path], renders: list[Pat
 def infer_recipe(config: VLMConfig, blueprint: Blueprint, evidence: dict, images: list[Path],
                  output: Path, feedback: list[str] | None = None,
                  external_claims: list[dict] | None = None,
-                 previous_recipe: dict | None = None) -> GeometryRecipe:
+                 previous_recipe: dict | None = None,
+                 geometric_feedback: list[dict] | None = None,
+                 schema_revisions: int = 0) -> GeometryRecipe:
     allowed = {v["ref_id"] for v in evidence["views"]}
     allowed.update(claim["source_id"] for claim in (external_claims or []) if claim.get("status") == "candidate")
     context = {
@@ -213,6 +269,7 @@ def infer_recipe(config: VLMConfig, blueprint: Blueprint, evidence: dict, images
         "allowed_refs": sorted(allowed),
         "external_claims": external_claims or [],
         "previous_issues": feedback or [],
+        "geometric_feedback": geometric_feedback or [],
         "previous_recipe": previous_recipe,
         "image_manifest": _image_manifest(evidence, images),
         "repair_instruction": (
@@ -226,15 +283,38 @@ def infer_recipe(config: VLMConfig, blueprint: Blueprint, evidence: dict, images
     vlm = make_vlm(config, system=GEOMETRY_SYSTEM)
     import json
 
-    recipe = infer_model(vlm, _stage_key("geometry-recipe", blueprint.object_id),
-                         json.dumps(context, ensure_ascii=False),
-                         images, GeometryRecipe, output / "trace")
-    recipe.check_against(blueprint, allowed)
+    if schema_revisions not in {0, 1}:
+        raise ValueError("geometry contract repair budget must be zero or one")
+    for attempt in range(schema_revisions + 1):
+        trace = output / ("trace" if attempt == 0 else f"trace-repair-{attempt}")
+        try:
+            recipe = infer_model(vlm, _stage_key("geometry-recipe", blueprint.object_id),
+                                 json.dumps(context, ensure_ascii=False),
+                                 images, GeometryRecipe, trace)
+            recipe.check_against(blueprint, allowed)
+            break
+        except ValueError as error:
+            write_json(trace / "rejected.json", {
+                "status": "invalid_recipe", "attempt": attempt,
+                "error": str(error)[:8000], "physics_status": "not_run",
+            })
+            if attempt == schema_revisions:
+                raise
+            context["contract_feedback"] = (
+                "Correct only the actual schema/identity/recipe-contract error below; "
+                "preserve the observed parts and hypotheses. Do not fabricate source or "
+                "standard component references. Unsupported mechanical interfaces stay unresolved.\n"
+                + str(error)[:8000]
+            )
     write_json(output / "recipe.json", recipe.model_dump(mode="json"))
     return recipe
 
 
 def _model_source(blueprint: Blueprint, recipe: GeometryRecipe) -> str:
+    if isinstance(blueprint, AssemblyBlueprint):
+        legacy_projection(blueprint)
+        if any(j.travel.value is None for j in blueprint.joints if j.type in {"revolute", "prismatic"}):
+            raise ValueError("assembly build needs explicit assumed or estimated travel; no silent default")
     solids = {p.name: [s for s in recipe.solids if s.part == p.name] for p in blueprint.parts}
     placements = {p.joint: p for p in recipe.joint_placements}
     coupled_joints = {name for coupling in blueprint.couplings
@@ -258,7 +338,7 @@ def _model_source(blueprint: Blueprint, recipe: GeometryRecipe) -> str:
         lines.append(f"    p{i} = m.part({p.name!r}, est_mass_kg={recipe.part_masses_kg[p.name]!r})")
         for j, solid in enumerate(solids[p.name]):
             mat = f"mat_{i}_{j}"
-            lines.append(f"    {mat} = m.material({mat!r}, rgba={solid.rgba!r}, material_class='matte_plastic')")
+            lines.append(f"    {mat} = m.material({mat!r}, rgba={solid.rgba!r}, material_class={solid.material_class!r})")
             lines.append(f"    p{i}.visual(mesh_from_input({solid.name!r}), material={mat}, name={solid.name!r})")
     for joint in blueprint.joints:
         placement = placements[joint.name]
@@ -273,6 +353,11 @@ def _model_source(blueprint: Blueprint, recipe: GeometryRecipe) -> str:
         if bounded_continuous:
             bound = coupled_bounds[joint.name]
             args.append(f"motion_limits=MotionLimits(lower={-bound!r}, upper={bound!r})")
+        elif joint.type == "continuous":
+            if joint.effort_limit.value is None or joint.velocity_limit.value is None:
+                raise ValueError(f"continuous joint {joint.name} needs explicit effort_limit and velocity_limit quantities")
+            args.append("motion_limits=MotionLimits("
+                        f"effort={joint.effort_limit.value!r}, velocity={joint.velocity_limit.value!r})")
         elif joint.type in {"revolute", "prismatic"}:
             span = joint.travel.value if joint.travel.value is not None else (math.pi / 2 if joint.type == "revolute" else 0.05)
             lower = -span if joint.rest == "at_max" else -span / 2 if joint.rest == "centered" else 0.0
@@ -310,10 +395,19 @@ def _preview_offsets(blueprint: Blueprint, recipe: GeometryRecipe) -> dict[str, 
     return result
 
 
+@traced("Blender + Artisan")
 def build_recipe(blueprint: Blueprint, recipe: GeometryRecipe, output: Path, *,
                  artisan_python: Path, blender: Path | None = None,
-                 timeout_seconds: int = 600) -> dict:
+                 timeout_seconds: int = 600, compiled_assembly: dict | None = None,
+                 component_root: Path | None = None) -> dict:
     """Build one candidate in a fresh directory; exported USD is not physics verified."""
+    from .geometric_verifier import persist_verification
+
+    if isinstance(blueprint, AssemblyBlueprint):
+        legacy_projection(blueprint)  # Refuse unsupported graphs/units; retain the full document below.
+        if any(j.travel.value is None for j in blueprint.joints if j.type in {"revolute", "prismatic"}):
+            raise ValueError("assembly build needs explicit assumed or estimated travel; no silent default")
+        persist_verification(output.parent / 'geometric_check', blueprint, recipe, require_pass=True)
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / "blueprint.json", blueprint.model_dump(mode="json"))
     write_json(output / "recipe.json", recipe.model_dump(mode="json"))
@@ -346,6 +440,12 @@ def build_recipe(blueprint: Blueprint, recipe: GeometryRecipe, output: Path, *,
         usd_path = output / usd_path
     if not usd_path.is_file():
         raise FileNotFoundError(f"Artisan USD export missing: {usd_path}")
+    if compiled_assembly is None and recipe.assembly and any(c.standard_ref for c in recipe.assembly.connections):
+        from .assembly_adapter import recipe_parts
+        from .connection_compiler import compile_plan
+
+        allowed = {ref for connection in recipe.assembly.connections for ref in connection.evidence_refs}
+        compiled_assembly = compile_plan(recipe.assembly, recipe_parts(blueprint, recipe), allowed_refs=allowed)
     original_usd = usd_path.resolve()
     adapter = Path(__file__).with_name("usd_adapter.py")
     with (output / "adaptation.log").open("w") as log:
@@ -355,10 +455,32 @@ def build_recipe(blueprint: Blueprint, recipe: GeometryRecipe, output: Path, *,
                        check=True, timeout=timeout_seconds)
     adaptation = read_json(output / "adapted/adaptation.json")
     usd_path = Path(adaptation["usd"])
+    standard_installation = None
+    if compiled_assembly:
+        write_json(output / "compiled_assembly.json", compiled_assembly)
+        bootstrap = ("import sys;sys.path.insert(0,sys.argv[1]);"
+                     "from roboenv_perception.standard_interactions.bundle import main;"
+                     "sys.argv=sys.argv[2:];main()")
+        argv = [str(artisan_python), "-c", bootstrap, str(Path(__file__).resolve().parents[2]),
+                "standard-bundle", "--source", str(usd_path.resolve()),
+                "--compiled", str((output / "compiled_assembly.json").resolve()),
+                "--output", str((output / "standard").resolve())]
+        if component_root:
+            argv.extend(["--component-root", str(component_root.resolve())])
+        with (output / "standard-installation.log").open("w") as log:
+            subprocess.run(argv, env=child_environment(), stdout=log, stderr=subprocess.STDOUT,
+                           check=True, timeout=timeout_seconds)
+        standard_installation = read_json(output / "standard/installation.json")
+        usd_path = Path(standard_installation["usd"])
     result = {"status": "compiled", "usd": str(usd_path.resolve()), "usd_sha256": sha256(usd_path),
               "model_sha256": sha256(output / "model.py"), "recipe_sha256": sha256(output / "recipe.json"),
               "visual_previews": [str((output / "visual" / p).resolve()) for p in built["previews"]],
               "physics_status": "not_run", "part_mass_source": "assumed_from_agent_recipe_not_measured"}
+    if standard_installation:
+        result["standard_installation"] = standard_installation
+        result["standard_bundle"] = str((output / "standard").resolve())
+        result["compiled_assembly_ref"] = str((output / "standard/compiled_assembly.json").resolve())
+        result["visual_standard_component_status"] = "previews_show_recipe_envelopes; delivered_screws_use_registered_slot_geometry"
     result["physics_notes"] = compile_report.get("export_report", {}).get("physics_notes", [])
     result["raw_usd"] = str(original_usd)
     result["raw_usd_sha256"] = sha256(original_usd)

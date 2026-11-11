@@ -8,17 +8,25 @@ from typing import Literal
 from PIL import Image
 from pydantic import Field, model_validator
 
+from ..construction.assembly_blueprint import parse_blueprint
 from ..construction.common import verify_run
-from ..construction.contracts import Blueprint, load_construction_config
+from ..construction.contracts import load_construction_config
 from ..construction.design import design_objects
 from ..construction.evidence import prepare_objects
 from ..contracts import Contract
+from ..execution.context import traced
 from ..io import load_config, read_json, relative_file, sha256, write_json
 from ..pipeline import run_image
+from ..standard_interactions.catalog import StandardComponentError
 from ..validation import validate_bundle
 from ..video_pipeline import run_video
+from .assembly import ASSEMBLY_INTENT, AssemblyPlan, infer_connections, persist_audit
+from .assembly_adapter import candidate_hashes, recipe_parts
+from .connection_compiler import compile_plan
+from .geometric_verifier import GeometryConstraintError
 from .geometry import build_recipe, infer_recipe, review_geometry
 from .media import run_images
+from .repair_policy import enforce_standard_recipe, is_standard_defect, route_physics_failures
 from .research import research_objects
 from .web import WebSearchPolicy
 
@@ -28,6 +36,7 @@ class HarnessRequest(Contract):
     task: str = Field(min_length=3, max_length=4000)
     video: Path | None = None
     images: list[Path] = Field(default_factory=list, max_length=32)
+    assembly_overrides: Path | None = None
 
     @model_validator(mode="after")
     def one_media_mode(self):
@@ -42,6 +51,8 @@ class HarnessSettings(Contract):
     artisan_python: Path
     blender: Path | None = None
     isaac_python: Path | None = None
+    standard_component_root: Path | None = None
+    assembly_validation: Literal["off", "preflight", "functional"] = "off"
     max_geometry_revisions: int = Field(default=3, ge=1, le=8)
     max_physics_revisions: int = Field(default=2, ge=0, le=5)
     max_wall_seconds: int = Field(default=7200, ge=60, le=86400)
@@ -57,6 +68,13 @@ class HarnessSettings(Contract):
     enable_scene_assembly: bool = True
     enable_physics: bool = True
     background_mode: Literal["off", "masks", "auto"] = "auto"
+    background_generation_config: Path | None = None
+
+    @model_validator(mode="after")
+    def generation_needs_background(self):
+        if self.background_generation_config and self.background_mode == "off":
+            raise ValueError("background generation cannot be requested with background_mode=off")
+        return self
 
 
 class HarnessFailure(RuntimeError):
@@ -68,8 +86,17 @@ def _fingerprint(request: HarnessRequest, settings: HarnessSettings) -> dict:
              settings.artisan_python, *(request.images or ([request.video] if request.video else []))]
     if settings.blender:
         paths.append(settings.blender)
+    if request.assembly_overrides:
+        paths.append(request.assembly_overrides)
     if settings.isaac_python:
         paths.append(settings.isaac_python)
+    if settings.background_generation_config:
+        paths.append(settings.background_generation_config)
+        from ..construction.background_generation import load_background_generation_config
+
+        generation = load_background_generation_config(settings.background_generation_config)
+        paths.extend(p for p in generation.model_path.rglob("*")
+                     if p.is_file() and ".cache" not in p.relative_to(generation.model_path).parts)
     perception = load_config(settings.perception_config)
     construction = load_construction_config(settings.construction_config)
     for filename in (construction.design.measurements, perception.sam.replay_manifest,
@@ -81,6 +108,7 @@ def _fingerprint(request: HarnessRequest, settings: HarnessSettings) -> dict:
             paths.extend(sorted(Path(config.replay_dir).glob("*.json")))
     # Resuming under changed controller/worker code must not reuse old reviews.
     paths.extend(sorted(Path(__file__).resolve().parents[1].rglob("*.py")))
+    paths.append(Path(__file__).resolve().parents[1] / "standard_interactions/catalog_v1.json")
     missing = [str(path) for path in paths if not Path(path).is_file()]
     if missing:
         raise FileNotFoundError(f"harness input or configured tool missing: {missing}")
@@ -103,6 +131,7 @@ def _next_path(root: Path, stage: str) -> Path:
     return root / f"{stage}-{i:03d}"
 
 
+@traced(lambda a, k: a[2] if len(a) > 2 else k["name"])
 def _stage(root: Path, state: dict, name: str, func):
     entry = state["stages"].get(name)
     if entry and entry["status"] == "completed":
@@ -167,7 +196,9 @@ def _perception(path: Path, request: HarnessRequest, config):
 def _build_assets(path: Path, designs: Path, evidence: Path, research: Path,
                   settings: HarnessSettings, config, deadline: float,
                   previous_assets: Path | None = None,
-                  repair_feedback: dict[str, list[str]] | None = None):
+                  repair_feedback: dict[str, list[str]] | None = None,
+                  assembly_required: bool = False,
+                  assembly_overrides: dict | None = None):
     path.mkdir(parents=True, exist_ok=False)
     design_index = read_json(designs / "designs.json")
     research_map = read_json(research / "research.json").get("objects", {})
@@ -182,15 +213,38 @@ def _build_assets(path: Path, designs: Path, evidence: Path, research: Path,
             rows.append({**entry, "build_status": "routed" if entry["status"] == "routed" else "blocked"})
             continue
         asset_id, object_id = entry["asset_id"], entry["object_id"]
-        blueprint = Blueprint.model_validate(read_json(designs / f"objects/{asset_id}/blueprint.json"))
+        blueprint = parse_blueprint(read_json(designs / f"objects/{asset_id}/blueprint.json"))
         observation = read_json(evidence / f"objects/{asset_id}/evidence.json")
         images = [relative_file(evidence, view["context_ref"]) for view in observation["views"]]
         web_claims = research_map.get(object_id, {}).get("claims", [])
+        if assembly_required:
+            context = {
+                'task': 'Infer mechanically plausible fastening hypotheses for this asset; '
+                        'return a JSON instance, never the schema itself.',
+                'blueprint': blueprint.model_dump(mode='json'),
+                'allowed_refs': [v['ref_id'] for v in observation['views']],
+                'image_order': [v['ref_id'] for v in observation['views']],
+                'external_claims': web_claims,
+            }
+            try:
+                reasoning = infer_connections(config.vlm, context, images,
+                                               path / asset_id / 'assembly_reasoning')
+                observation = {**observation, 'assembly_reasoning': reasoning.model_dump(mode='json')}
+            except Exception as error:
+                write_json(path / asset_id / 'assembly_reasoning/failure.json',
+                           {'error': f'{type(error).__name__}: {error}',
+                            'status': 'proposal_unavailable; geometry-stage reasoning still required'})
         row = {"asset_id": asset_id, "object_id": object_id, "build_status": "unverified",
                "attempts": []}
         issues = repair_feedback.get(asset_id, [])
+        geometric_feedback = []
         prior_recipe = (read_json(Path(previous[asset_id]["recipe_ref"]))
                         if asset_id in previous and previous[asset_id].get("recipe_ref") else None)
+        frozen_standard = {}
+        if prior_recipe and prior_recipe.get("assembly"):
+            from .geometry import GeometryRecipe
+
+            frozen_standard = enforce_standard_recipe(GeometryRecipe.model_validate(prior_recipe), {})
         for revision in range(settings.max_geometry_revisions):
             if time.monotonic() >= deadline:
                 issues.append("task wall time budget exhausted")
@@ -201,12 +255,32 @@ def _build_assets(path: Path, designs: Path, evidence: Path, research: Path,
             row["attempts"].append(attempt)
             try:
                 recipe = infer_recipe(config.vlm, blueprint, observation, images,
-                                      candidate_dir / "author", issues, web_claims, prior_recipe)
+                                      candidate_dir / "author", issues, web_claims, prior_recipe,
+                                      **({'geometric_feedback': geometric_feedback} if geometric_feedback else {}))
                 prior_recipe = recipe.model_dump(mode="json")
+                if assembly_overrides and object_id in assembly_overrides:
+                    recipe.assembly = AssemblyPlan.model_validate(assembly_overrides[object_id])
+                    write_json(candidate_dir / 'assembly_override.json', assembly_overrides[object_id])
+                    write_json(candidate_dir / 'author/recipe.json', recipe.model_dump(mode='json'))
+                    prior_recipe = recipe.model_dump(mode='json')
+                allowed_refs = {v['ref_id'] for v in observation['views']}
+                allowed_refs.update(c['source_id'] for c in web_claims if c.get('status') == 'candidate')
+                frozen_standard = enforce_standard_recipe(recipe, frozen_standard)
+                compiled = compile_plan(recipe.assembly, recipe_parts(blueprint, recipe),
+                                        allowed_refs=allowed_refs)
+                if compiled:
+                    write_json(candidate_dir / 'assembly/compiled_assembly.json', compiled)
+                assembly = persist_audit(candidate_dir / 'assembly', recipe_parts(blueprint, recipe),
+                                         recipe.assembly, allowed_refs=allowed_refs,
+                                         required=assembly_required,
+                                         candidate_hashes=candidate_hashes(blueprint, recipe))
                 built = build_recipe(blueprint, recipe, candidate_dir / "built",
                                      artisan_python=settings.artisan_python,
                                      blender=settings.blender,
-                                     timeout_seconds=settings.build_timeout_seconds)
+                                     timeout_seconds=settings.build_timeout_seconds,
+                                     **({"compiled_assembly": compiled,
+                                         "component_root": settings.standard_component_root}
+                                        if compiled else {}))
                 review = review_geometry(config.vlm, blueprint, observation, recipe,
                                          images, built, candidate_dir / "review")
                 attempt.update(status="reviewed", candidate=built,
@@ -218,11 +292,50 @@ def _build_assets(path: Path, designs: Path, evidence: Path, research: Path,
                                model_ref=str((candidate_dir / "built/model.py").resolve()),
                                preview_refs=built["visual_previews"], physics_status="not_run",
                                physics_notes=built.get("physics_notes", []))
+                    row.update(assembly_status=assembly['status'],
+                               assembly_report=str((candidate_dir / 'assembly/assembly_validation.json').resolve()),
+                               assembly_report_sha256=sha256(candidate_dir / 'assembly/assembly_validation.json'))
+                    if compiled:
+                        row.update(compiled_assembly_ref=str((candidate_dir / 'assembly/compiled_assembly.json').resolve()),
+                                   compiled_assembly_sha256=sha256(candidate_dir / 'assembly/compiled_assembly.json'),
+                                   standard_components_status='installed_not_physically_verified' if built.get('standard_bundle') else 'compiled_not_physically_verified',
+                                   standard_bundle=built.get('standard_bundle'))
                     break
                 issues = review.issues
+            except StandardComponentError as error:
+                issues = [f"{type(error).__name__}: {error}"]
+                attempt.update(status="blocked", issues=issues, failure_domain="standard_primitive")
+                row["failure_domain"] = "standard_primitive"
+                write_json(candidate_dir / "assembly/standard_defect.json",
+                           {"failure_domain": "standard_primitive", "issues": issues,
+                            "action": "stop_and_record_defect"})
+                break
+            except GeometryConstraintError as error:
+                geometric_feedback = error.report['feedback']
+                attempt.update(status='failed', geometric_feedback=error.report['feedback'])
+                issues = [f"{r['requirement_id']}: {r['message']}" for r in error.report['feedback']]
+                attempt['issues'] = issues
+                if any(r['repair_target'] in {'blueprint', 'verifier'} for r in error.report['feedback']):
+                    attempt['status'] = 'blocked'
+                    row.update(failure_domain='assembly_description',
+                               repair_target='blueprint_or_verifier', geometric_feedback=error.report['feedback'])
+                    write_json(candidate_dir / 'geometric_check/repair_request.json', {
+                        'status': 'requires_description_or_verifier_revision',
+                        'input_sha256': error.report['input_sha256'],
+                        'feedback': geometric_feedback,
+                        'action': 'return structured findings to native orchestration; no silent Stage 1 rewrite',
+                    })
+                    break
             except Exception as error:
                 issues = [f"{type(error).__name__}: {error}"]
                 attempt.update(status="failed", issues=issues)
+                if is_standard_defect(error):
+                    attempt.update(status="blocked", failure_domain="standard_primitive")
+                    row["failure_domain"] = "standard_primitive"
+                    write_json(candidate_dir / "assembly/standard_defect.json",
+                               {"failure_domain": "standard_primitive", "issues": issues,
+                                "action": "stop_and_record_defect"})
+                    break
             write_json(path / "assets.json", {"objects": rows + [row], "all_visual_reviews_passed": False})
         if row["build_status"] != "visual_review_passed":
             row["issues"] = issues
@@ -238,7 +351,8 @@ def _build_assets(path: Path, designs: Path, evidence: Path, research: Path,
     return "assets.json"
 
 
-def _assemble(path: Path, assets: Path, evidence: Path, request: HarnessRequest):
+def _assemble(path: Path, assets: Path, evidence: Path, request: HarnessRequest,
+              usd_python: Path | None = None):
     from .scene import SupportSpec, assemble_scene, scene_asset_from_evidence
 
     inventory = read_json(assets / "assets.json")
@@ -264,7 +378,7 @@ def _assemble(path: Path, assets: Path, evidence: Path, request: HarnessRequest)
     records = []
     for row in ready:
         built = Path(row["model_ref"]).parent
-        blueprint = Blueprint.model_validate(read_json(built / "blueprint.json"))
+        blueprint = parse_blueprint(read_json(built / "blueprint.json"))
         records.append(scene_asset_from_evidence(
             row["asset_id"], Path(row["usd"]), observations[row["asset_id"]],
             read_json(built / "visual/result.json"), frame_id, image_size,
@@ -286,7 +400,8 @@ def _assemble(path: Path, assets: Path, evidence: Path, request: HarnessRequest)
                           dimension_source="assumed",
                           evidence_refs=[support_view["ref_id"]] if support_view else ["task:assumed_support"],
                           dimension_note="Provisional support dimensions from task context; no metric calibration.")
-    assemble_scene(records, path, support)
+    assemble_scene(records, path, support,
+                   **({"usd_python": usd_python} if usd_python else {}))
     layout = read_json(path / "layout.json")
     write_json(path / "scene_result.json", {"status": "assembled", "scene_ref": "scene.usda",
                                             "layout_ref": "layout.json", "issues": layout["issues"],
@@ -310,7 +425,7 @@ def _verify(path: Path, scene: Path, assets: Path, settings: HarnessSettings,
     if scene_result.get("status") != "assembled":
         write_json(path / "physics.json", {"status": "blocked", "results": []})
         return "physics.json"
-    if not settings.isaac_python:
+    if not settings.isaac_python and settings.assembly_validation == "off":
         write_json(path / "physics.json", {"status": "not_run", "reason": "Isaac Python unconfigured", "results": []})
         return "physics.json"
     layout = read_json(scene / "layout.json")
@@ -324,7 +439,39 @@ def _verify(path: Path, scene: Path, assets: Path, settings: HarnessSettings,
         if row.get("build_status") != "visual_review_passed":
             continue
         asset_id = row["asset_id"]
-        blueprint = Blueprint.model_validate(read_json(Path(row["model_ref"]).parent / "blueprint.json"))
+        blueprint = parse_blueprint(read_json(Path(row["model_ref"]).parent / "blueprint.json"))
+        recipe_ref = row.get("recipe_ref")
+        recipe_data = read_json(Path(recipe_ref)) if recipe_ref else {}
+        if recipe_data.get("assembly") or row.get("compiled_assembly_ref"):
+            if settings.assembly_validation != "off" and row.get("standard_bundle"):
+                from ..standard_interactions.validation import run_validation
+
+                cases = (("preflight",) if settings.assembly_validation == "preflight"
+                         else ("preflight", "one-fast", "motor-off"))
+                remaining = settings.physics_timeout_seconds if deadline is None else deadline - time.monotonic()
+                report_path = path / asset_id / "standard-bench"
+                try:
+                    report = run_validation(Path(row["standard_bundle"]), report_path,
+                                            cases=cases, timeout_s=max(.01, remaining))
+                    output_rows.append({"asset_id": asset_id, "status": "unverified", "tests": [],
+                                        "bench_status": report.get("bench_status", report["status"]),
+                                        "failure_domain": "test_harness", "scene_physics_status": "not_run",
+                                        "issues": ["independent standard bench evidence; composed-scene and complete assembly acceptance pending"],
+                                        "report": str(report_path / "validation.json")})
+                except Exception as error:
+                    output_rows.append({"asset_id": asset_id, "status": "failed", "tests": [],
+                                        "failure_domain": "test_harness", "report": None,
+                                        "issues": [f"{type(error).__name__}: {error}"]})
+            else:
+                output_rows.append({"asset_id": asset_id, "status": "unsupported", "tests": [],
+                                    "failure_domain": "test_harness",
+                                    "issues": ["assembly requires the versioned connection protocol; generic rigid/hinge tests do not certify it"],
+                                    "report": None, "physics_status": "not_run"})
+            continue
+        if not settings.isaac_python:
+            output_rows.append({"asset_id": asset_id, "status": "not_run", "tests": [],
+                                "issues": ["Isaac Python unconfigured"]})
+            continue
         moving = [j for j in blueprint.joints if j.type != "fixed"]
         by_name = {joint.name: joint for joint in moving}
         protocols = []
@@ -391,12 +538,14 @@ def _verify(path: Path, scene: Path, assets: Path, settings: HarnessSettings,
                 tests.append({"name": name, "family": protocol.family.value,
                               "protocol": protocol.as_dict(),
                               "status": result.status, "issues": list(result.issues),
+                              "failure_domain": result.failure_domain,
                               "report": str(result.report_path) if result.report_path else None,
                               "report_sha256": result.report_sha256})
             except Exception as error:
                 tests.append({"name": name, "family": protocol.family.value,
                               "protocol": protocol.as_dict(),
                               "status": "failed", "issues": [f"{type(error).__name__}: {error}"],
+                              "failure_domain": "test_harness",
                               "report": None, "report_sha256": None})
             write_json(path / "physics.json", {"status": "running", "results": output_rows + [
                 {"asset_id": asset_id, "status": "running", "tests": tests}]})
@@ -424,6 +573,9 @@ def _background(path: Path, perception: Path, designs: Path, config,
 
     path.mkdir(parents=True, exist_ok=False)
     report = {"status": "not_run", "stages": {}, "physical_collision": False}
+    if settings.background_generation_config:
+        report["generation_requested"] = True
+        report["generation"] = {"status": "not_run"}
     if settings.background_mode == "off":
         write_json(path / "background_result.json", report)
         return "background_result.json"
@@ -459,6 +611,25 @@ def _background(path: Path, perception: Path, designs: Path, config,
     except Exception as error:
         report["error"] = f"{type(error).__name__}: {error}"
         report["status"] = "partial" if report["stages"] else "failed"
+    # Completion uses prepared masks even when optional COLMAP/GS is unavailable.
+    if settings.background_generation_config and report["stages"].get("masks") == "completed":
+        try:
+            from ..construction.background_generation import (
+                complete_prepared_background,
+                load_background_generation_config,
+            )
+
+            generation = load_background_generation_config(settings.background_generation_config)
+            remaining = int(deadline - time.monotonic())
+            if remaining < 10:
+                raise RuntimeError("wall-time budget exhausted before optional background generation")
+            generation = generation.model_copy(update={"timeout_seconds": min(generation.timeout_seconds, remaining)})
+            report["generation"] = complete_prepared_background(path / "prepared", path / "generated", generation)
+            report["stages"]["local_generation"] = "completed"
+        except Exception as error:
+            report["generation"] = {"status": "failed", "error": f"{type(error).__name__}: {error}"}
+        # A generated image is delivered separately; no silent scene/physics replacement.
+        report["generation"]["scene_integration"] = "not_run; use explicit fixed-view background display"
     write_json(path / "background_result.json", report)
     return "background_result.json"
 
@@ -469,10 +640,21 @@ def _package(path: Path, request: HarnessRequest, stages: dict[str, Path]):
     scene = read_json(stages["scene"] / "scene_result.json")
     physics = read_json(stages["physics"] / "physics.json")
     physical_status = {item["asset_id"]: item["status"] for item in physics.get("results", [])}
+    review_flags = []
     for asset in assets["objects"]:
+        if asset.get('assembly_status') not in {None, 'not_applicable'}:
+            review_flags.append({'code': 'assembly_dynamics_unverified', 'asset_id': asset['asset_id'],
+                                 'reason': 'Connection geometry checked; preload, release and load transfer not verified.'})
         if asset.get("build_status") == "visual_review_passed":
             asset["physics_status"] = physical_status.get(asset["asset_id"], physics["status"])
     background = read_json(stages["background"] / "background_result.json")
+    if background.get("generation_requested"):
+        generated = background.get("generation", {})
+        if generated.get("status") != "generated":
+            review_flags.append({"code": "background_generation_incomplete", "status": generated.get("status")})
+        else:
+            review_flags.append({"code": "generated_background_visual_review_pending",
+                                 "reason": "2D appearance candidate; not loaded or reviewed as a complete environment."})
     research = read_json(stages["research"] / "research.json")
     task_scope = read_json(stages["task_scope"] / "task_scope.json")
     design = read_json(stages["design"] / "designs.json")
@@ -482,7 +664,6 @@ def _package(path: Path, request: HarnessRequest, stages: dict[str, Path]):
     design_run = read_json(stages["design"] / "run.json")
     quality = read_json(relative_file(stages["perception"], perception["quality_ref"]))
     evidence_index = read_json(stages["evidence"] / "objects.json")
-    review_flags = []
     if not scope_plan.get("all_resolved"):
         review_flags.append({"code": "object_scope_unresolved"})
     if perception_run.get("execution_mode") == "replay":
@@ -556,6 +737,8 @@ def run_harness(request: HarnessRequest, settings: HarnessSettings, output: Path
     perception_config = load_config(settings.perception_config)
     construction_config = load_construction_config(settings.construction_config)
     paths = {}
+    assembly_overrides = read_json(request.assembly_overrides) if request.assembly_overrides else {}
+    assembly_required = bool(ASSEMBLY_INTENT.search(request.task))
     try:
         paths["perception"] = _stage(output, state, "perception",
                                      lambda path: _perception(path, request, perception_config))
@@ -588,10 +771,14 @@ def run_harness(request: HarnessRequest, settings: HarnessSettings, output: Path
         paths["assets"] = _stage(output, state, "assets",
                                  lambda path: _build_assets(path, paths["design"], paths["evidence"],
                                                             paths["research"], settings,
-                                                            construction_config, deadline))
+                                                            construction_config, deadline,
+                                                            assembly_required=assembly_required,
+                                                            assembly_overrides=assembly_overrides))
         if settings.enable_scene_assembly:
             paths["scene"] = _stage(output, state, "scene",
-                                    lambda path: _assemble(path, paths["assets"], paths["evidence"], request))
+                                    lambda path: _assemble(path, paths["assets"], paths["evidence"], request,
+                                                            usd_python=settings.artisan_python if any(
+                                                                r.get("standard_bundle") for r in read_json(paths["assets"] / "assets.json")["objects"]) else None))
         else:
             def no_scene(path):
                 path.mkdir(parents=True, exist_ok=False)
@@ -612,9 +799,8 @@ def run_harness(request: HarnessRequest, settings: HarnessSettings, output: Path
             report = read_json(paths["physics"] / "physics.json")
             if report["status"] == "passed" or time.monotonic() >= deadline:
                 break
-            feedback = {item["asset_id"]: item.get("issues", [])
-                        for item in report.get("results", [])
-                        if item.get("status") == "failed" and item.get("report")}
+            feedback, routes = route_physics_failures(report)
+            write_json(output / f"repair-routing-{revision:02d}.json", {"routes": routes})
             if not feedback:
                 break
             suffix = f"repair-{revision + 1:02d}"
@@ -623,9 +809,13 @@ def run_harness(request: HarnessRequest, settings: HarnessSettings, output: Path
                                      lambda path: _build_assets(path, paths["design"], paths["evidence"],
                                                                 paths["research"], settings,
                                                                 construction_config, deadline,
-                                                                previous_assets, feedback))
+                                                                previous_assets, feedback,
+                                                                assembly_required=assembly_required,
+                                                                assembly_overrides=assembly_overrides))
             paths["scene"] = _stage(output, state, f"scene-{suffix}",
-                                    lambda path: _assemble(path, paths["assets"], paths["evidence"], request))
+                                    lambda path: _assemble(path, paths["assets"], paths["evidence"], request,
+                                                            usd_python=settings.artisan_python if any(
+                                                                r.get("standard_bundle") for r in read_json(paths["assets"] / "assets.json")["objects"]) else None))
             paths["physics"] = _stage(output, state, f"physics-{suffix}",
                                       lambda path: _verify(path, paths["scene"], paths["assets"], settings,
                                                            deadline, initial_physics))

@@ -64,9 +64,9 @@ def run_demo(output: Path):
             "acceptance": ["Retain unknown metric scale", "Preserve intended cavity"],
             "unresolved": ["Dimensions, underside and scene pose unknown"],
         }
-        from .contracts import Blueprint
+        from .assembly_blueprint import migrate_envcreator
 
-        blueprint = Blueprint.model_validate(blueprint).model_dump(mode="json")
+        blueprint = migrate_envcreator(blueprint, read_json(replay / f"{asset}-intake.json")).model_dump(mode="json")
         write_json(replay / f"{asset}-blueprint-0.json", blueprint)
         write_json(
             replay / f"{asset}-review-0.json",

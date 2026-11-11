@@ -187,6 +187,11 @@ def run(args):
     ).app
     try:
         import isaaclab.sim as sim_utils
+        from roboenv_perception.execution.isaac_runtime import (
+            physx_config,
+            simulation_config,
+            state_wxyz,
+        )
         import numpy as np
         import omni.usd
         import torch
@@ -201,11 +206,11 @@ def run(args):
             if not omni.usd.get_context().open_stage(str(args.input.resolve() / "scene.usda")):
                 raise RuntimeError("Cannot reload scene.usda")
         sim = sim_utils.SimulationContext(
-            sim_utils.SimulationCfg(
+            simulation_config(
                 device="cpu",
                 dt=dt,
                 render_interval=8,
-                physx=sim_utils.PhysxCfg(
+                physx=physx_config(
                     solver_type=1, enable_external_forces_every_iteration=True
                 ),
             )
@@ -269,7 +274,7 @@ def run(args):
             contact.update(dt)
             row = {
                 "t": (len(rows) + 1) * dt,
-                "root": bicycle.data.root_state_w[0].cpu().numpy().tolist(),
+                "root": state_wxyz(bicycle.data.root_state_w[0].cpu().numpy()).tolist(),
                 "q": bicycle.data.joint_pos[0].cpu().numpy().tolist(),
                 "qd": bicycle.data.joint_vel[0].cpu().numpy().tolist(),
                 "contact_N": contact.data.net_forces_w[0].cpu().numpy().tolist(),

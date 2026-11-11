@@ -8,7 +8,6 @@ This screen is a capability restriction, not an OS security sandbox.
 
 import ast
 import json
-import os
 import subprocess
 from pathlib import Path
 from typing import Literal
@@ -18,6 +17,8 @@ from pydantic import Field, model_validator
 from ..contracts import Contract
 from ..io import read_json, sha256, write_json
 from ..vlm import make_vlm
+from .artisan_backend import child_environment as child_environment
+from .artisan_backend import run_artisan as run_artisan
 from .design import infer_model
 
 
@@ -73,6 +74,20 @@ def compile_review_qa(plan, blueprint):
             '    ctx.check("no_active_behavior_or_mimic", joint.behavior is None and joint.mimic is None)',
             '    ctx.fail_if_parts_overlap_in_sampled_poses(max_pose_samples=8)',
         ])
+        if blueprint.get('category') == 'laptop' and 'width_m' in blueprint:
+            # Frozen construction dimensions, not expectations inferred from the candidate.
+            for name, size, center in [
+                ('base', (blueprint['width_m'], blueprint['depth_m'], blueprint['base_thickness_m']),
+                 (0, blueprint['depth_m']/2, -blueprint['base_thickness_m']/2)),
+                ('lid', (blueprint['width_m'], blueprint['lid_length_m'], blueprint['lid_thickness_m']),
+                 (0, blueprint['lid_length_m']/2, blueprint['lid_thickness_m']/2)),
+            ]:
+                lines.extend([
+                    f'    part = next(p for p in ctx.model.parts if p.name == {name!r})',
+                    f'    ctx.check({name + "_single_structural_surface"!r}, len(part.visuals) == 1)',
+                    f'    ctx.check({name + "_blueprint_dimensions"!r}, len(part.visuals) == 1 and hasattr(part.visuals[0].geometry, "size") and all(abs(a-b) < 1e-7 for a,b in zip(part.visuals[0].geometry.size, {size!r})))',
+                    f'    ctx.check({name + "_canonical_origin"!r}, len(part.visuals) == 1 and all(abs(a-b) < 1e-7 for a,b in zip(part.visuals[0].origin.xyz, {center!r})) and all(abs(v) < 1e-7 for v in part.visuals[0].origin.rpy))',
+                ])
     lines.append('    return ctx.report()')
     return '\n'.join(lines)+'\n'
 
@@ -119,30 +134,6 @@ def validate_program(source: str, entrypoint: str):
         raise ValueError(f'missing generated entrypoint {entrypoint}')
 
 
-def child_environment():
-    env = {k: v for k, v in os.environ.items()
-           if not any(part in k.upper() for part in ['KEY', 'TOKEN', 'SECRET', 'PASSWORD', 'CREDENTIAL'])}
-    for k in ['PYTHONHOME', 'PYTHONPATH']:
-        env.pop(k, None)
-    env['PYTHONDONTWRITEBYTECODE'] = '1'
-    return env
-
-
-def run_artisan(python: Path, workspace: Path, mode='build', timeout=900):
-    worker = Path(__file__).with_name('artisan_asset_worker.py')
-    log = workspace/f'{mode}.log'
-    with log.open('w') as stream:
-        result = subprocess.run([str(python), str(worker), mode, str(workspace.resolve())],
-                                cwd=workspace, env=child_environment(), stdout=stream,
-                                stderr=subprocess.STDOUT, timeout=timeout)
-    report = read_json(workspace/f'{mode}.json') if (workspace/f'{mode}.json').exists() else {}
-    if mode == 'qa' and report.get('failures') and not report.get('error'):
-        return report  # A valid test that finds a defect is candidate feedback, not a tester exception.
-    if result.returncode or not report.get('passed'):
-        raise RuntimeError(f'Artisan {mode} failed: {log}; {json.dumps(report)[:5000]}')
-    return report
-
-
 def code_asset(config, blueprint, images, workspace, python, sdk_docs, max_revisions=2, review_feedback=''):
     workspace.mkdir(parents=True, exist_ok=True)
     write_json(workspace/'blueprint.json', blueprint)
@@ -187,6 +178,33 @@ For laptop replace body with base and lid from blueprint Box/origin/masses and m
     raise RuntimeError('bounded Coding repairs exhausted: '+feedback)
 
 
+def supplementary_hinge_evidence(root):
+    """Bind optional angle trials to the current scene, including negative results."""
+    reports = {}
+    for name in ('hinge-primary', 'hinge-followup'):
+        path = root/name/'validation.json'
+        if not path.is_file():
+            continue
+        data = read_json(path)
+        original_scene = Path(data['source_scene'])
+        hashes = data.get('source_hashes', {})
+        if str(original_scene) not in hashes:
+            raise ValueError('Supplementary hinge report lacks a scene binding')
+        for source, digest in hashes.items():
+            relative = Path(source).relative_to(original_scene.parent)
+            current = (root/'simulation'/relative).resolve()
+            if not current.is_relative_to((root/'simulation').resolve()) or sha256(current) != digest:
+                raise ValueError('Supplementary hinge evidence does not bind the current scene/assets')
+        reports[name] = {
+            'report_sha256': sha256(path), 'status': data.get('status'),
+            'checks': data.get('checks', {}), 'scope': data.get('scope'),
+            'cases': [{k: row[k] for k in ('name', 'status', 'checks', 'initial_target_deg',
+                       'hold_drift_deg', 'motion_deg', 'applied_torque_Nm') if k in row}
+                      for row in data.get('cases', [])],
+        }
+    return reports
+
+
 def review_asset(config, workspace, images, evidence, python, testing_docs):
     candidate = sha256(workspace/'model.py')
     blueprint = read_json(workspace/'blueprint.json')
@@ -204,10 +222,12 @@ def review_asset(config, workspace, images, evidence, python, testing_docs):
         if sha256(usd.parent/ref) != digest:
             raise ValueError('USD dependency changed after physics verification')
     inputs = {str(p.relative_to(workspace)): sha256(p) for p in (workspace/'inputs').rglob('*') if p.is_file()}
+    supplementary = supplementary_hinge_evidence(workspace.parents[1])
     context = {'blueprint': blueprint,
                'model_source': (workspace/'model.py').read_text(),
                'compile': read_json(workspace/'build.json'),
-               'candidate_sha256': candidate, 'evidence': evidence}
+               'candidate_sha256': candidate, 'evidence': evidence,
+               'supplementary_hinge': supplementary}
     vlm = make_vlm(config, system='You are the independent Review Agent. JSON only. '
                    'Review the exact candidate against its blueprint, original references, rendered candidate and '
                    'bound actual-USD physics evidence. You cannot edit model.py or evidence. '
@@ -231,7 +251,10 @@ def review_asset(config, workspace, images, evidence, python, testing_docs):
                    'Never use ctx.check(..., True) or hardcode a previous physics result as a new test. '
                    'Physics reports are already separately gated and should be discussed in observations. '
                    'Treat supplied physical parameters as assumptions, not measurements. '
-                   'Do not claim physical tests absent from the evidence.')
+                   'Do not claim physical tests absent from the evidence. '
+                   'Supplementary hinge failures constrain the accepted scope even when baseline scene tests pass. '
+                   'For the laptop explicitly describe failed angle holds in observations; holds_anywhere is an intent, '
+                   'not evidence of all-angle holding. Do not hide failures behind an overall PASS.')
     start = len(list((workspace/'traces').glob('review-*')))
     for attempt in range(2):
         try:
@@ -261,7 +284,8 @@ def review_asset(config, workspace, images, evidence, python, testing_docs):
             continue
         if sha256(workspace/'model.py') != candidate or any(sha256(workspace/p) != digest for p, digest in inputs.items()):
             raise ValueError('Candidate changed during independent Review')
-        value.update(qa=qa, physics_evidence_sha256=evidence.get('report_sha256'),
+        value.update(qa=qa, supplementary_hinge=supplementary,
+                     physics_evidence_sha256=evidence.get('report_sha256'),
                      input_hashes=inputs, usd_sha256=binding['usd_sha256'],
                      qa_sha256=sha256(workspace/'qa_tests.py'), blueprint_sha256=sha256(workspace/'blueprint.json'))
         write_json(workspace/'review.json', value)
@@ -296,8 +320,10 @@ def review_scene(config, root, images):
         path = root/'simulation'/value['usd_ref']
         if sha256(path) != value['usd_sha256'] or any(sha256(path.parent/ref) != h for ref, h in value['dependency_hashes'].items()):
             raise ValueError('Reviewed USD/dependency changed')
+    supplementary = supplementary_hinge_evidence(root)
     context = {'scene_sha256': scene_sha, 'scene_spec': read_json(root/'scene-build-spec.json'),
                'object_reviews': reviews, 'physics': physics, 'reload': reload,
+               'supplementary_hinge': supplementary,
                'geometry': read_json(root/'fit/geometry-validation.json'),
                'image_order': ['original frame 1', 'original frame 16', 'simulated initial assembled scene', 'after physics interactions'],
                'user_goal': 'Table + the three original items, approximate metric interactive assets. No robot or extra blocks. '
@@ -308,12 +334,15 @@ def review_scene(config, root, images):
                    'Block on missing required objects/mechanisms, inconsistent geometry/placement or failed evidence. '
                    'Respect the declared contact-oriented scope and distinguish limitations from blocking defects. '
                    'Do not invent real-world measurement accuracy, robot capability, or unseen functionality. '
-                   'Describe finite visibility, uncertain dimensions/materials and weak geometry as limitations where appropriate.')
+                   'Describe finite visibility, uncertain dimensions/materials and weak geometry as limitations where appropriate. '
+                   'Explicitly include failed supplementary angle holds in limitations even if baseline scope passes. '
+                   'An initial scene-angle hold and MotionFeel intent do not establish all-angle holding.')
     result = infer_model(vlm, 'scene-review', json.dumps(context), images, SceneReview, root/'traces/scene-review')
     if result.scene_sha256 != scene_sha:
         raise ValueError('Scene reviewer did not bind the exact scene')
     value = result.model_dump(mode='json')
-    value.update(physics_report_sha256=sha256(root/'simulation/validation.json'),
+    value.update(supplementary_hinge=supplementary,
+                 physics_report_sha256=sha256(root/'simulation/validation.json'),
                  reload_report_sha256=sha256(root/'scene-reload/validation.json'),
                  geometry_report_sha256=sha256(root/'fit/geometry-validation.json'),
                  scene_spec_sha256=sha256(root/'scene-build-spec.json'),

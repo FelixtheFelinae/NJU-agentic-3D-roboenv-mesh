@@ -25,6 +25,11 @@ def run(source, output):
     code = 2
     try:
         import isaaclab.sim as sim_utils
+        from roboenv_perception.execution.isaac_runtime import (
+            physx_config,
+            simulation_config,
+            state_wxyz,
+        )
         import numpy as np
         import omni.usd
         import torch
@@ -77,9 +82,9 @@ def run(source, output):
         if not omni.usd.get_context().open_stage(str(source/'scene.usda')):
             raise RuntimeError('Cannot open reviewed scene')
         dt = 1/240
-        sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(
+        sim = sim_utils.SimulationContext(simulation_config(
             device='cpu', dt=dt, render_interval=8,
-            physx=sim_utils.PhysxCfg(solver_type=1, enable_external_forces_every_iteration=True)))
+            physx=physx_config(solver_type=1, enable_external_forces_every_iteration=True)))
         q_home = standing_pose()
         q_home['waist_pitch_joint'] = .38
         root_xyz = (.015, 0, .77792370309)
@@ -122,12 +127,12 @@ def run(source, output):
         kinematics = RobotKinematics(urdf, root_xyz=root_xyz)
         (output/'robot-joint-names.json').write_text(json.dumps(robot.joint_names))
         (output/'robot-body-names.json').write_text(json.dumps(robot.body_names))
-        print('ROBOT_ROOT', robot.data.root_state_w[0].cpu().numpy().tolist(), flush=True)
+        print('ROBOT_ROOT', state_wxyz(robot.data.root_state_w[0].cpu().numpy()).tolist(), flush=True)
         q = {name: float(value) for name, value in zip(robot.joint_names, robot.data.joint_pos[0])}
         q.update(q_home)
         initial_laptop_angle = float(laptop.data.joint_pos[0, 0])
         baseline_mouse = mouse.data.root_pos_w[0].cpu().numpy().copy()
-        base_pose = laptop.data.root_state_w[0].cpu().numpy().copy()
+        base_pose = state_wxyz(laptop.data.root_state_w[0].cpu().numpy()).copy()
         rb = Rotation.from_quat(np.r_[base_pose[4:7], base_pose[3]]).as_matrix()
         tip = np.array([.17218, .0361, .00667])
         palm = np.array([.115, .02165, 0])
@@ -219,14 +224,14 @@ def run(source, output):
                     forces[side] = sensor.data.force_matrix_w[0, 0].cpu().numpy().tolist()
                 row = {'t': (step+1)*dt, 'phase': phase, 'hinge_deg': math.degrees(float(laptop.data.joint_pos[0, 0])),
                        'mouse_position': mouse.data.root_pos_w[0].cpu().numpy().tolist(),
-                       'laptop_root_state': laptop.data.root_state_w[0].cpu().numpy().tolist(),
+                       'laptop_root_state': state_wxyz(laptop.data.root_state_w[0].cpu().numpy()).tolist(),
                        'robot_joint_positions': robot.data.joint_pos[0].cpu().numpy().tolist(),
                        'joint_targets': joint_target[0].cpu().numpy().tolist(),
                        'filtered_hand_forces_N': forces}
                 tool_positions = {}
                 for side, offset in [('right', tip), ('left', palm)]:
                     body_id = robot.body_names.index(side+'_wrist_yaw_link')
-                    body = robot.data.body_state_w[0, body_id].cpu().numpy()
+                    body = state_wxyz(robot.data.body_state_w[0, body_id].cpu().numpy())
                     rotation = Rotation.from_quat(np.r_[body[4:7], body[3]]).as_matrix()
                     tool_positions[side] = (body[:3]+rotation@offset).tolist()
                 row['tool_positions_w'] = tool_positions

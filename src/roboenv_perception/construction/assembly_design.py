@@ -1,5 +1,9 @@
 """Shared Intake/assembly/selfcheck contract used by component and legacy Harness."""
 
+import json
+
+from pydantic import ValidationError
+
 from ..io import sha256, write_json
 from .assembly_blueprint import AssemblyBlueprint, digest
 from .contracts import DesignReview
@@ -7,6 +11,16 @@ from .contracts import DesignReview
 ASSEMBLY_INSTRUCTION = """Author the new AssemblyBlueprint only, replacing the legacy blueprint format.
 Embed the exact accepted asset_brief unchanged. Use part_definitions and part_instances;
 instances may share a definition. parent is organizational, NOT a required mechanical joint tree.
+The current construction adapter nevertheless requires each non-root parent to match
+one explicit joint. When previous_readiness reports a conflict, inspect original images
+and explicitly revise the grouping if justified; never add a fake joint to satisfy export.
+Interface.kind uses the literal plane, NOT planar (planar is a constraint type).
+For planar requirements reference ONE explicit plane interface; for orthogonal/parallel/
+coplanar reference TWO distinct plane interfaces. Do not write "orthogonal" with just a
+top plane or refer only to a part. The current verifier checks plane normals, not arbitrary
+edges/axes. Do not substitute plane-normal parallelism for hinge-axis/edge parallelism.
+hinge_region/contact_region are valid unresolved descriptions, not recovered shaft/hole
+features. Preserve them when evidence is insufficient, even if construction is blocked.
 Describe functional interfaces with part-local frames; unknown origin/rotation must be null,
 not zero. Keep mates separate from kinematic joints and link each joint by mate_id.
 A revolute joint does not prove shaft-hole geometry, friction, or a real hinge implementation.
@@ -31,7 +45,33 @@ themselves blocking description defects. No simulation or CAD result has been ob
 """
 
 
-def check_assembly(blueprint, *, brief=None, allowed_refs=None):
+def author_assembly(vlm, context, images, output, *, schema_revisions=0):
+    """One optional correction of a failed schema response, retaining both traces."""
+    from .design import infer_model
+
+    if schema_revisions not in {0, 1}:
+        raise ValueError("assembly schema repair budget must be zero or one")
+    for attempt in range(schema_revisions + 1):
+        trace = output / ("author" if attempt == 0 else "author-repair-1")
+        try:
+            return infer_model(
+                vlm, "component-blueprint" if attempt == 0 else "component-blueprint-repair-1",
+                ASSEMBLY_INSTRUCTION + "\nAuthor or REVISE the assembly description. "
+                "Apply previous_findings explicitly; previous is a candidate to correct, "
+                "not an authoritative answer to copy.\n" + json.dumps(context, ensure_ascii=False),
+                images, AssemblyBlueprint, trace,
+            )
+        except ValidationError as error:
+            write_json(trace / "rejected.json", {"status": "invalid_description", "error": str(error)[:8000]})
+            if attempt == schema_revisions:
+                raise
+            context = {**context, "contract_feedback":
+                       "Correct the actual schema error below. Keep the accepted intake, original "
+                       "evidence, unknown quantities and mechanical requirements; do not fabricate "
+                       "hidden geometry or delete difficult constraints.\n" + str(error)[:8000]}
+
+
+def check_assembly(blueprint, *, brief=None, allowed_refs=None, previous=None):
     """Deterministic description checks; never assert geometry/physical verification."""
     blueprint = AssemblyBlueprint.model_validate(blueprint.model_dump(mode="json"))
     issues, assumptions = [], []
@@ -81,6 +121,11 @@ def check_assembly(blueprint, *, brief=None, allowed_refs=None):
         for q in (p.dimensions_m.x, p.dimensions_m.y, p.dimensions_m.z, p.mass_kg)
     ):
         assumptions.append("geometry/physics contains estimates or assumptions")
+    from .assembly_readiness import analyze_readiness, revision_findings
+
+    changed = revision_findings(previous, blueprint)
+    issues.extend(row["message"] for row in changed)
+
     return {
         "schema_version": "envcreator.assembly-selfcheck/1",
         "status": "needs_revision"
@@ -94,13 +139,16 @@ def check_assembly(blueprint, *, brief=None, allowed_refs=None):
         "scope": "description consistency only; not independent review or geometry validation",
         "geometry_status": "not_run",
         "physics_status": "not_run",
+        "construction_readiness": analyze_readiness(blueprint),
+        "revision_findings": changed,
+        "previous_description_sha256": digest(previous.model_dump(mode="json")) if previous is not None else None,
     }
 
 
-def selfcheck_assembly(vlm, blueprint, images, output, *, stage, brief, allowed_refs, context=""):
+def selfcheck_assembly(vlm, blueprint, images, output, *, stage, brief, allowed_refs, context="", previous=None):
     from .design import infer_model
 
-    report = check_assembly(blueprint, brief=brief, allowed_refs=allowed_refs)
+    report = check_assembly(blueprint, brief=brief, allowed_refs=allowed_refs, previous=previous)
     path = output / "blueprint.json"
     write_json(path, blueprint.model_dump(mode="json"))
     file_digest = sha256(path)

@@ -2,7 +2,10 @@
 
 
 def finding(stage, status, report, *, report_ref, candidate, observation_refs):
-    if stage == "geometry_audit":
+    if stage == "structure_audit":
+        issues = report.get("issues", [])
+        scope = "structure" if any(r["repair_target"] == "blueprint" for r in issues) else "unsupported"
+    elif stage == "geometry_audit":
         issues = report.get("feedback", [])
         targets = {row.get("repair_target") for row in issues}
         if not issues or "verifier" in targets:

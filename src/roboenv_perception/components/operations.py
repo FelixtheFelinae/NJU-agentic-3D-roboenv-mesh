@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from ..construction.assembly_blueprint import AssemblyBlueprint, parse_blueprint
-from ..construction.assembly_design import ASSEMBLY_INSTRUCTION, selfcheck_assembly
+from ..construction.assembly_design import ASSEMBLY_INSTRUCTION, author_assembly, selfcheck_assembly
 from ..construction.common import verify_run
 from ..construction.contracts import AssetBrief, DesignReview, load_construction_config
 from ..construction.design import (
@@ -248,6 +248,10 @@ def run(
                 "measurements": measurements,
                 "previous": read_json(paths["previous"]) if "previous" in paths else None,
             }
+            if "previous" in paths:
+                from ..construction.assembly_readiness import analyze_readiness
+
+                context["previous_readiness"] = analyze_readiness(parse_blueprint(context["previous"]))
             if 'geometric_verification' in paths:
                 from ..harness.geometric_verifier import bound_feedback
 
@@ -294,17 +298,10 @@ def run(
             if params.get("blueprint"):
                 blueprint = AssemblyBlueprint.model_validate(params["blueprint"])
             else:
-                blueprint = infer_model(
-                    author,
-                    "component-blueprint",
-                    ASSEMBLY_INSTRUCTION + "\nAuthor or REVISE the assembly description. "
-                    "Apply previous_findings explicitly; previous is a candidate to correct, "
-                    "not an authoritative answer to copy.\n" + json.dumps(
-                        {**context, "asset_brief": brief.model_dump(mode="json"), "assembly_instruction": ASSEMBLY_INSTRUCTION}, ensure_ascii=False
-                    ),
-                    images,
-                    AssemblyBlueprint,
-                    output / "blueprint/author",
+                blueprint = author_assembly(
+                    author, {**context, "asset_brief": brief.model_dump(mode="json"),
+                             "assembly_instruction": ASSEMBLY_INSTRUCTION}, images,
+                    output / "blueprint", schema_revisions=1 if workflow else 0,
                 )
             validate_blueprint_evidence(
                 blueprint,
@@ -318,6 +315,7 @@ def run(
                 brief=brief, allowed_refs={v["ref_id"] for v in data["views"]} | set(measurements)
                 | {c["source_id"] for c in claims if c.get("status") == "candidate"},
                 context=json.dumps(context, ensure_ascii=False),
+                previous=parse_blueprint(context["previous"]) if context["previous"] else None,
             )
             if checked["status"] == "needs_revision" and not workflow:
                 raise ValueError("装配描述自检查需要修订：" + "; ".join(checked["issues"]))
@@ -352,12 +350,14 @@ def run(
             exports = {"blueprint_review": "review/review.json"}
             status = "review_passed" if review.decision == "PASS" else "unverified"
         elif operation == "geometry":
+            from ..construction.assembly_readiness import require_readiness
             from ..harness.geometry import GeometryRecipe, infer_recipe
 
             _, data, images = observation(paths["evidence"], object_id)
             blueprint = parse_blueprint(read_json(paths["blueprint"]))
             if blueprint.object_id != data["object_id"]:
                 raise ValueError("结构与对象身份不匹配")
+            require_readiness(blueprint, output)
             claims = claims_for(paths, data["object_id"])
             geometric_feedback = []
             if 'geometric_verification' in paths:

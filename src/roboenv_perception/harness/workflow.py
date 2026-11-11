@@ -16,6 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..artifacts.registry import content_digest, tree_index, verify_tree
 from ..components.catalog import requirements
 from ..construction.assembly_blueprint import parse_blueprint
+from ..construction.assembly_readiness import VERSION as READINESS_VERSION
+from ..construction.assembly_readiness import analyze_readiness
 from ..execution.context import emit
 from ..io import read_json, relative_file, sha256, write_json
 from . import workflow_critic as critic
@@ -157,7 +159,7 @@ class Workflow:
             return old
         if time.monotonic() >= self.deadline:
             raise TimeoutError("工作流达到本次执行时限，可从已保存阶段继续")
-        internal = {"video_overview", "evidence_fusion", "build_hypothesis", "build_hypothesis_audit"}
+        internal = {"video_overview", "evidence_fusion", "build_hypothesis", "build_hypothesis_audit", "structure_audit"}
         missing = [] if operation in internal else requirements(operation, self.settings)
         if missing:
             raise ValueError(f'{operation} 缺少运行配置：{", ".join(missing)}')
@@ -172,7 +174,11 @@ class Workflow:
             from ..components.sources import source_path
 
             paths = {role: source_path(binding) for role, binding in bindings.items()}
-            if operation == "evidence_fusion":
+            if operation == "structure_audit":
+                report = analyze_readiness(parse_blueprint(read_json(paths["blueprint"])))
+                write_json(output / "construction_readiness.json", report)
+                exports, status = {"construction_readiness": "construction_readiness.json"}, report["status"]
+            elif operation == "evidence_fusion":
                 origins = [
                     {**row, "evidence": paths[f"evidence_{i}"], "perception": paths[f"perception_{i}"]}
                     for i, row in enumerate(params["origins"])
@@ -188,7 +194,6 @@ class Workflow:
                 exports = {"blueprint": "blueprint.json", "build_hypothesis": "hypothesis.json"}
                 status = read_json(output / "selfcheck.json")["status"]
             else:
-                from ..construction.assembly_blueprint import parse_blueprint
                 from .geometry import GeometryRecipe
 
                 report = hypothesis.audit(
@@ -364,6 +369,7 @@ class Workflow:
             blueprint=None if kind == "evidence" else s["blueprint"], final_stages=[],
             build_blueprint=None, build_review=None, pending_hypothesis=None,
             pending_fusion=None, build_attempts=0,
+            structure_readiness=None,
         )
 
     def record(self, receipt, role, candidate, report_name=None):
@@ -455,6 +461,7 @@ class Workflow:
                 s["blueprint_review"] = review
                 self.record(review, "blueprint_review", self.candidate(blueprint=bp))
                 if review["status"] == "review_passed":
+                    self.audit_structure(bp)
                     self.phase("structure", reason=None)
                     return
             else:
@@ -473,6 +480,7 @@ class Workflow:
             }, object_id=s["target"]["object_id"])
             s["build_review"] = review
             self.record(review, "blueprint_review", self.candidate(blueprint=derivative))
+            self.audit_structure(derivative)
             self.phase("structure" if review["status"] == "review_passed" else "recovery",
                        reason="独立构建假设已保存并审核；原始未知量没有被改写")
             return
@@ -481,10 +489,22 @@ class Workflow:
         if s["phase"] == "validation":
             self.finish()
 
+    def audit_structure(self, blueprint):
+        receipt = self.stage("structure_audit", {"blueprint": (blueprint, "blueprint")},
+                             params={"version": READINESS_VERSION})
+        self.state["structure_readiness"] = receipt
+        self.record(receipt, "construction_readiness", self.candidate(blueprint=blueprint))
+        self.save()
+        return receipt
+
     def construct(self):
         s = self.state
         target = s["target"]["object_id"]
         bp = self.active_blueprint()
+        readiness = self.audit_structure(bp)
+        if readiness["status"] != "compatible":
+            self.phase("recovery", reason="连接树或功能面要求尚不能构建；请根据原始画面修订结构，禁止进入几何作者")
+            return
         try:
             self.preflight_build()
         except ValueError as exc:
@@ -660,6 +680,8 @@ class Workflow:
             "sampling": s.get("sampling"), "objects": objects, "objects_total": len(s["objects"]),
             "blueprint": bp, "critic": s["critic"][-8:], "history": history, "rounds": s["rounds"][-4:],
             "blueprint_identity": blueprint_identity, "construction_hypothesis": construction,
+            "construction_readiness": analyze_readiness(parse_blueprint(
+                read_json(self.ref(self.active_blueprint(), "blueprint")))) if bp else None,
             "backend_requirements": hypothesis.requirements(parse_blueprint(
                 read_json(self.ref(self.active_blueprint(), "blueprint")))) if bp else [],
             "previews": previews, "physics_status": s["physics_status"],

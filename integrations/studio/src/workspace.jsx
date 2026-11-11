@@ -134,6 +134,7 @@ function WorkflowView({data,tab,onAsk,busy}){
     {(data.previews??[]).filter(p=>(kinds[tab]??[]).includes(p.name)).map(p=><figure className="ec-render-frame" key={p.name}><img src={link(p.artifact)} alt={names[p.name]??"实际结果"}/><figcaption>{names[p.name]}</figcaption></figure>)}
     {tab==="input"&&<p className="ec-view-note">原视频预览供选取时间段，不表示已经恢复相机视角或真实尺寸。</p>}
     {tab==="structure"&&(data.blueprint?<div className="ec-human-card"><h3>当前结构</h3><p>{(data.blueprint.part_instances??[]).map(p=>p.name).join("、")}</p><p>{(data.blueprint.joints??[]).length} 个关节 · {(data.blueprint.mates??[]).length} 个配合关系</p>{(data.blueprint.unresolved??[]).map((text,i)=><p key={i}>{text}</p>)}<small>结构描述通过，不等于接口几何或物理功能通过。</small></div>:<p>选定对象后会生成结构方案。</p>)}
+    {tab==="structure"&&data.construction_readiness&&<div className="ec-human-card"><h3>建模前检查</h3><p>{data.construction_readiness.summary}</p>{data.construction_readiness.issues.slice(0,4).map((item,i)=><p key={i}>{item.message}</p>)}{data.construction_readiness.issues.length>4&&<small>还有 {data.construction_readiness.issues.length-4} 项问题，可结合检查记录重新检查结构。</small>}</div>}
     {tab==="structure"&&data.construction_hypothesis&&<div className="ec-human-card"><h3>候选构建假设</h3><p>以下数值用于试验，原始描述中的未知量仍保留。</p>{data.construction_hypothesis.plan.parameters.slice(0,8).map((p,i)=>{
       const parts=p.path.split("/"),last=parts.at(-1);
       const name=last==="rest"?"关节参考约定":last==="travel"?"候选行程":last==="mass_kg"?"候选质量":`候选尺寸 ${last.toUpperCase()}`;

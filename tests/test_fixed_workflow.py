@@ -316,9 +316,9 @@ def test_explicit_build_hypothesis_uses_derivative_and_keeps_real_geometry_gate(
     assert read_json(canonical)["joints"][0]["travel"]["value"] is None
     result = advance(w, tmp_path, "accept_structure", reason="test real geometric gate")
     assert result["phase"] == "recovery"
-    assert c.calls.count("geometry_audit") == 1
+    assert c.calls.count("geometry") == c.calls.count("geometry_audit") == 0
     assert "build" not in c.calls  # Undefined hinge surfaces remain unresolved.
-    assert result["critic"][-1]["stage"] == "geometry_audit"
+    assert result["critic"][-1]["stage"] == "structure_audit"
 
 
 def test_stale_build_hypothesis_does_not_consume_revision(tmp_path):

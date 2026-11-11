@@ -69,6 +69,7 @@ def test_rotation_and_antiparallel_axes_are_geometrically_equivalent():
     # Rotate shaft and hole to +Y/-Y; use actual solid transforms, not declaration axes.
     recipe.solids[0].rotation_rpy = (math.pi / 2, 0, 0)
     recipe.solids[1].rotation_rpy = (-math.pi / 2, 0, 0)
+    bp.joints[0].axis_child = (0, 1, 0)
     assert verify_geometry(bp, recipe)["status"] == "passed"
 
 

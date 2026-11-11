@@ -85,8 +85,10 @@ def validate_blueprint_evidence(blueprint, brief, evidence, measurements, extern
     allowed.update(external_refs)
     if isinstance(blueprint, AssemblyBlueprint):
         checked = check_assembly(blueprint, brief=brief, allowed_refs=allowed)
-        if checked["issues"]:
-            raise ValueError("; ".join(checked["issues"]))
+        # Structural contradictions belong to the persisted selfcheck/Critic
+        # path. Only provenance/intake failures are evidence validation errors.
+        if checked["evidence_issues"]:
+            raise ValueError("; ".join(checked["evidence_issues"]))
         allowed.update(e.id for e in blueprint.evidence if e.origin == "prior")
 
     def visit(value):

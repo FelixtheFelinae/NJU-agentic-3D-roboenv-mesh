@@ -179,3 +179,50 @@ Workflow 的结构作者因此最多按真实 Schema 错误纠正一次；保留
 
 具体代码边界、笔记本/自行车实测、失败与回归结果见
 [P0-3 记录](../reports/FIXED_WORKFLOW_P03_20261111.md)。
+
+## P0-4：明确平面、轴线与边缘
+
+AssemblyBlueprint 保持 `/1` 可读格式，Interface.kind 增加 `axis`、`edge`。
+`axis_local` 明确表示所属零件坐标下的方向；对 plane 表示法线，未知时保持 null。
+axis 是理想关节线或实体圆柱中心线，不表示已恢复的轴孔接触面。
+原 hinge_region/contact_region 不自动升级，Mate 的接触要求不因新增 axis 而解除。
+
+`construction/feature_relations.py` 由结构门禁和几何审核共同使用，规定关系语义：
+
+| 关系 | 支持对象 | 检查含义 |
+| --- | --- | --- |
+| planar | 一个 plane | 实际解析平面 |
+| parallel / orthogonal | 两个面、两条线、或线与面 | 面与面比较法线；线与面比较线和面本身，不能拿法线替代面 |
+| coplanar | 两个 plane | 法线方向与平面间距 |
+| coaxial | 两条 axis / edge / 圆柱中心线 | 方向与位置；有限几何范围内双向检查轴偏差 |
+| clearance / revolute / cylindrical | 圆柱接触表面 | 保留原实际轴孔几何、间隙和重叠要求；理想 axis 不能替代 |
+
+`GeometryRecipe.interface_bindings` 新增三个实际来源：
+
+- `joint_axis`：指定已有运动关节 joint，不填 solid；方向和位置直接取构建器实际使用的 axis_child 与 joint_placements。接口必须属于该关节端点。
+- `cylinder_axis`：指定已有 cylinder/annulus 实体 solid，取其中心线，不另外编写一条理想几何。
+- `box_edge`：指定 box 实体、edge_axis=x/y/z 和另两个坐标的 edge_sides=[min/max,min/max]，定位实际 12 条边之一；随实体旋转和平移。
+
+边不能绑定为面，接触面不能绑定为 joint_axis；重复接口、跨零件绑定、未知关节等保持拒绝。
+几何审核另外检查 revolute/cylindrical Mate 的实际轴孔是否对齐导出的理想关节轴，
+同时检查角度及有限表面范围内的轴偏差，避免轴孔匹配但绕错误轴转动。
+
+建模前还比较同一零件内明确给出的 axis_local：若关系与已声明方向矛盾，
+产生 declared_direction_conflict，描述自检查返回 needs_revision，先于模型自检查。
+跨零件没有参考位姿、方向未知时不推算。此检查不证明声明方向符合真实视频，
+也不处理任意自然语言描述等价性。
+
+来源校验单独使用 evidence_issues；结构方向矛盾由 selfcheck 保存候选并返回
+needs_revision，交给已有 Critic/修订路径，不作为来源错误提前抛弃候选。
+未知或伪造的证据、Intake 不一致仍按原规则拒绝。
+
+结构检查版本为 `envcreator.assembly-readiness/2`，几何审核为
+`envcreator.geometric-verification/2`。Workflow 的结构/几何审核缓存包含对应版本，
+旧收据保留，继续执行时不复用旧规则下的审核结果。构建入口仍重新执行几何审核；
+历史 `/1` 反馈可作为哈希匹配的修订线索，不能替代当前审核。
+
+本轮只审核实际解析配方及平移参考树；未验证导出网格、动态构型或物理接触。
+外观/运动学近似与接触级构建的分流仍待实现，未决铰链接触配合仍会阻塞当前构建。
+
+代码路径、真实笔记本/自行车输出及回归结果见
+[P0-4 记录](../reports/FIXED_WORKFLOW_P04_20261111.md)。

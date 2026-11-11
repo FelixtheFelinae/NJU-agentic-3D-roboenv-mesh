@@ -111,11 +111,30 @@ class JointPlacement(Contract):
 
 class InterfaceBinding(Contract):
     interface_id: str
-    solid: str
+    solid: str | None = None
+    joint: str | None = None
     feature: Literal[
         "cylinder_outer", "cylinder_inner",
         "box_x_min", "box_x_max", "box_y_min", "box_y_max", "box_z_min", "box_z_max",
+        "box_edge", "cylinder_axis", "joint_axis",
     ]
+    # The other two coordinates, in XYZ order, select an actual box edge.
+    edge_axis: Literal["x", "y", "z"] | None = None
+    edge_sides: tuple[Literal["min", "max"], Literal["min", "max"]] | None = None
+
+    @model_validator(mode="after")
+    def feature_source(self):
+        if self.feature == "joint_axis":
+            if self.joint is None or self.solid is not None:
+                raise ValueError("joint_axis requires a joint and no solid")
+        elif self.solid is None or self.joint is not None:
+            raise ValueError("solid feature requires a solid and no joint")
+        if self.feature == "box_edge":
+            if self.edge_axis is None or self.edge_sides is None:
+                raise ValueError("box_edge requires edge_axis and edge_sides")
+        elif self.edge_axis is not None or self.edge_sides is not None:
+            raise ValueError("edge selectors are only valid for box_edge")
+        return self
 
 
 class GeometryRecipe(Contract):
@@ -143,11 +162,23 @@ class GeometryRecipe(Contract):
                 raise ValueError("interface bindings require the assembly blueprint schema")
             interfaces = {i.id: i for i in blueprint.interfaces}
             solids = {s.name: s for s in self.solids}
+            joints = {j.name: j for j in blueprint.joints}
             bound = [b.interface_id for b in self.interface_bindings]
             if len(bound) != len(set(bound)):
                 raise ValueError("duplicate interface binding")
             for binding in self.interface_bindings:
-                if binding.interface_id not in interfaces or binding.solid not in solids:
+                if binding.interface_id not in interfaces:
+                    raise ValueError("interface binding references an unknown interface/solid")
+                if binding.feature == "joint_axis":
+                    joint = joints.get(binding.joint)
+                    if joint is None or joint.type not in {"revolute", "continuous", "prismatic"}:
+                        raise ValueError("joint axis requires an existing moving joint")
+                    if interfaces[binding.interface_id].kind != "axis":
+                        raise ValueError("joint axis is kinematic, not a contact surface or edge")
+                    if interfaces[binding.interface_id].part not in {joint.parent, joint.child}:
+                        raise ValueError("joint axis binding belongs to a different part")
+                    continue
+                if binding.solid not in solids:
                     raise ValueError("interface binding references an unknown interface/solid")
                 if interfaces[binding.interface_id].part != solids[binding.solid].part:
                     raise ValueError("interface binding belongs to a different part")
@@ -221,7 +252,12 @@ GEOMETRY_SYSTEM = (
     "A hollow_cylinder has a closed bottom and is NOT a through hole. "
     "For AssemblyBlueprint interfaces, populate interface_bindings: interface_id, actual solid "
     "name, feature=cylinder_outer/cylinder_inner or box_x_min/box_x_max/box_y_min/box_y_max/"
-    "box_z_min/box_z_max. A hole must bind the inner surface of an actual annulus, never "
+    "box_z_min/box_z_max. For an edge interface use feature=box_edge, solid=<box>, "
+    "edge_axis=x/y/z and edge_sides=[min/max,min/max] selecting the other two XYZ coordinates. "
+    "For an axis interface use cylinder_axis on an actual cylinder/annulus, or joint_axis "
+    "with joint=<existing moving joint> and solid=null. joint_axis is only the ideal "
+    "kinematic axis, never recovered hinge hardware or a contact surface. "
+    "A hole must bind the inner surface of an actual annulus, never "
     "a decorative cylinder or independent geometric claim. Bind plane interfaces to actual "
     "box faces. Unresolved hinge_region cannot be upgraded into recovered shaft-hole contact "
     "without a revised blueprint hypothesis. Missing/unsupported bindings remain unresolved. "

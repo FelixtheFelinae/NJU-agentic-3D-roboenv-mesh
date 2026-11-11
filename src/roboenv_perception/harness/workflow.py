@@ -141,6 +141,12 @@ class Workflow:
 
     def stage(self, operation, sources=None, *, params=None, object_id=None):
         sources, params = sources or {}, params or {}
+        # Changed verifier semantics must not reuse an older PASS receipt.
+        verifier_key = {}
+        if operation == "geometry_audit":
+            from .geometric_verifier import VERSION as GEOMETRY_VERSION
+
+            verifier_key = {"verifier_version": GEOMETRY_VERSION}
         bindings = {}
         for role, (receipt, export) in sources.items():
             path = self.ref(receipt, export)
@@ -149,6 +155,7 @@ class Workflow:
                 "files": tree_index(path) if path.is_dir() else {".": sha256(path)},
             }
         key = stable_digest({
+            **verifier_key,
             "operation": operation, "object_id": object_id, "params": params,
             "sources": {r: [row["ref"], row["digest"], export] for r, (row, export) in sources.items()},
         })

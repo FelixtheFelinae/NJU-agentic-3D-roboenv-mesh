@@ -4,9 +4,12 @@ This is a read-only capability check, not geometry or physics verification. In
 particular it never converts organizational parents into mechanical joints.
 """
 
-from .assembly_blueprint import AssemblyBlueprint, digest
+import math
 
-VERSION = "envcreator.assembly-readiness/1"
+from .assembly_blueprint import AssemblyBlueprint, digest
+from .feature_relations import LINEAR, direction_residual, relation_error
+
+VERSION = "envcreator.assembly-readiness/2"
 
 
 def revision_findings(previous, current):
@@ -21,7 +24,7 @@ def revision_findings(previous, current):
     old_interfaces = {i.id: i for i in previous.interfaces}
     new_interfaces = {i.id: i for i in current.interfaces}
     new_constraints = {c.id: c for c in current.geometric_constraints}
-    axial = {"hinge_region", "shaft", "hole", "cylinder", "thread_internal", "thread_external"}
+    axial = LINEAR | {"hinge_region", "thread_internal", "thread_external"}
     for requirement in previous.geometric_constraints:
         candidate = new_constraints.get(requirement.id)
         code, message = None, None
@@ -102,21 +105,29 @@ def analyze_readiness(blueprint):
                       f"{requirement.id}（{requirement.type}）需要 {expected} 个不同的具体接口，当前为 {refs}；"
                       "零件名称或文字描述不能替代功能面绑定。", refs=refs)
                 continue
-            if requirement.type in {"planar", "orthogonal", "parallel", "coplanar"}:
-                kinds = {"plane"}
-            elif requirement.type in {"coaxial", "clearance", "revolute", "cylindrical"}:
-                kinds = {"shaft", "hole", "cylinder"}
-            else:
+            error = relation_error(requirement.type, [interfaces[r].kind for r in refs])
+            if error == "unsupported relation":
                 issue("unsupported_relation", path,
                       f"{requirement.id}（{requirement.type}）尚无确定性几何审核实现；保留要求，不能以模型 PASS 替代。",
                       refs=refs, target="verifier")
                 continue
-            for ref in refs:
-                interface = interfaces[ref]
-                if interface.kind not in kinds:
-                    issue("nonfunctional_interface", path,
-                          f"{requirement.id} 引用的 {ref} 是 {interface.kind}，当前审核需要 {sorted(kinds)}。"
-                          "若原图只支持模糊区域，应保留未决并回访证据，不要虚构隐藏轴孔。", refs=[ref])
+            if error:
+                issue("nonfunctional_interface", path,
+                      f"{requirement.id} 的接口角色不相容：{error}。"
+                      "若原图只支持模糊区域，应保留未决并回访证据，不要虚构隐藏轴孔。", refs=refs)
+            elif source == "geometric_constraints" and requirement.type in {"parallel", "orthogonal", "coplanar", "coaxial"}:
+                a, b = (interfaces[r] for r in refs)
+                # Only compare explicitly declared directions in one part frame.
+                # Cross-part poses and unknown axes cannot be inferred here.
+                if a.part == b.part and a.axis_local is not None and b.axis_local is not None:
+                    tolerance = requirement.parameters.get("angular_tolerance")
+                    limit = 1e-3 if tolerance is None else (
+                        tolerance.quantity.value if tolerance.unit == "rad" else None)
+                    residual = direction_residual(requirement.type, [a.kind, b.kind], a.axis_local, b.axis_local)
+                    if limit is not None and 0 < limit < math.pi / 2 and residual > limit:
+                        issue("declared_direction_conflict", path,
+                              f"{requirement.id} 的关系与同一零件内已声明方向矛盾（角误差 {residual:.6g} rad）。"
+                              "线与平面垂直表示线沿法线；线与法线垂直表示线与平面平行，不能混用。", refs=refs)
 
     report = {
         "schema": VERSION, "status": "blocked" if issues else "compatible",

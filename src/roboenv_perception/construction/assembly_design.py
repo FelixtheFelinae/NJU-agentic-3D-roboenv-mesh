@@ -15,10 +15,19 @@ The current construction adapter nevertheless requires each non-root parent to m
 one explicit joint. When previous_readiness reports a conflict, inspect original images
 and explicitly revise the grouping if justified; never add a fake joint to satisfy export.
 Interface.kind uses the literal plane, NOT planar (planar is a constraint type).
-For planar requirements reference ONE explicit plane interface; for orthogonal/parallel/
-coplanar reference TWO distinct plane interfaces. Do not write "orthogonal" with just a
-top plane or refer only to a part. The current verifier checks plane normals, not arbitrary
-edges/axes. Do not substitute plane-normal parallelism for hinge-axis/edge parallelism.
+For planar reference ONE plane; coplanar needs TWO planes. orthogonal/parallel needs TWO
+explicit features: plane, axis or edge. For line-plane parallel, the line lies along the
+plane (perpendicular to its normal); for line-plane orthogonal it follows the normal.
+axis is an ideal kinematic line or a cylinder centerline, NOT a shaft/hole contact surface.
+edge is an actual straight box edge, NOT its adjacent face normal. Use an axis interface
+for the joint's ideal rotation axis and an edge interface for a visible rectangular border.
+coaxial needs two lines with matching direction AND position, not just parallel normals.
+Do not write orthogonal with just one top plane or only a part name. Preserve original
+requirements and IDs when resolving hinge-axis/edge relations; never replace them with
+helper-plane relations. Refining hinge_region to an axis does NOT resolve its contact mate.
+For a rectangular base use TWO ADJACENT SIDE PLANES or TWO ADJACENT EDGES for orthogonality.
+A border lying in the top plane is PARALLEL to that plane; it is NOT orthogonal to the plane.
+axis_local is a direction/plane normal in the owning part coordinates, null when unknown.
 hinge_region/contact_region are valid unresolved descriptions, not recovered shaft/hole
 features. Preserve them when evidence is insufficient, even if construction is blocked.
 Describe functional interfaces with part-local frames; unknown origin/rotation must be null,
@@ -123,8 +132,11 @@ def check_assembly(blueprint, *, brief=None, allowed_refs=None, previous=None):
         assumptions.append("geometry/physics contains estimates or assumptions")
     from .assembly_readiness import analyze_readiness, revision_findings
 
+    evidence_issues = list(issues)
     changed = revision_findings(previous, blueprint)
     issues.extend(row["message"] for row in changed)
+    readiness = analyze_readiness(blueprint)
+    issues.extend(row["message"] for row in readiness["issues"] if row["code"] == "declared_direction_conflict")
 
     return {
         "schema_version": "envcreator.assembly-selfcheck/1",
@@ -134,12 +146,13 @@ def check_assembly(blueprint, *, brief=None, allowed_refs=None, previous=None):
         if assumptions
         else "ready",
         "issues": issues,
+        "evidence_issues": evidence_issues,
         "assumptions": assumptions,
         "description_sha256": digest(blueprint.model_dump(mode="json")),
         "scope": "description consistency only; not independent review or geometry validation",
         "geometry_status": "not_run",
         "physics_status": "not_run",
-        "construction_readiness": analyze_readiness(blueprint),
+        "construction_readiness": readiness,
         "revision_findings": changed,
         "previous_description_sha256": digest(previous.model_dump(mode="json")) if previous is not None else None,
     }

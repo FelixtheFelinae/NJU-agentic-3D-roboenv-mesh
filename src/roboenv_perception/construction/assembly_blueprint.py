@@ -90,6 +90,8 @@ class Interface(Contract):
     part: str
     kind: Literal[
         "plane",
+        "axis",
+        "edge",
         "cylinder",
         "hole",
         "shaft",
@@ -101,7 +103,9 @@ class Interface(Contract):
         "contact_region",
     ]
     local_frame: LocalFrame = Field(default_factory=LocalFrame)
-    axis_local: tuple[float, float, float] | None = None
+    axis_local: tuple[float, float, float] | None = Field(
+        default=None, description="Direction or plane normal in owning part coordinates; null if unknown."
+    )
     parameters: dict[str, Parameter] = Field(default_factory=dict)
     basis: Basis
     evidence_refs: list[str] = Field(default_factory=list)

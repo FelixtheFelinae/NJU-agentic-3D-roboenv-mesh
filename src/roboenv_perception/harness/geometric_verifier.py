@@ -11,8 +11,11 @@ import numpy as np
 from pydantic import Field
 
 from ..construction.assembly_blueprint import AssemblyBlueprint, digest
+from ..construction.feature_relations import direction_residual, relation_error
 from ..contracts import Contract
 from ..io import write_json
+
+VERSION = "envcreator.geometric-verification/2"
 
 
 class VerificationPolicy(Contract):
@@ -89,11 +92,52 @@ def _offsets(blueprint, recipe):
     return result
 
 
-def _feature(interface, binding, solids, offsets):
+def _feature(interface, binding, solids, offsets, joints):
+    if binding.feature == "joint_axis":
+        joint = joints[binding.joint]
+        if interface.kind != "axis":
+            raise ValueError("ideal joint axis requires an axis interface, not a contact surface")
+        return {
+            "kind": "axis",
+            "origin": offsets[joint.child],
+            "axis": np.array(joint.axis_child),
+            "part": interface.part,
+            "joint": joint.name,
+            "basis": "ideal_kinematic_axis",
+        }
     solid = solids[binding.solid]
     matrix = rotation(solid.rotation_rpy)
     origin = offsets[solid.part] + np.array(solid.center_m)
     feature = binding.feature
+    if feature == "cylinder_axis":
+        if solid.shape not in {"cylinder", "annulus"} or interface.kind != "axis":
+            raise ValueError("cylinder_axis requires an axis interface and actual cylinder/annulus")
+        return {
+            "kind": "axis",
+            "origin": origin,
+            "axis": matrix[:, 2],
+            "length": solid.length_m,
+            "part": solid.part,
+            "solid": solid.name,
+        }
+    if feature == "box_edge":
+        if solid.shape != "box" or interface.kind != "edge":
+            raise ValueError("box_edge requires an edge interface and actual box")
+        index = "xyz".index(binding.edge_axis)
+        point = origin.copy()
+        others = [i for i in range(3) if i != index]
+        for component, side in zip(others, binding.edge_sides):
+            point += (
+                matrix[:, component] * solid.size_m[component] / 2 * (-1 if side == "min" else 1)
+            )
+        return {
+            "kind": "edge",
+            "origin": point,
+            "axis": matrix[:, index],
+            "length": solid.size_m[index],
+            "part": solid.part,
+            "solid": solid.name,
+        }
     if feature in {"cylinder_outer", "cylinder_inner"}:
         if solid.shape not in {"cylinder", "annulus"}:
             raise ValueError("cylindrical feature requires cylinder or through-bored annulus")
@@ -139,12 +183,21 @@ def _parameter(requirement, key, unit, default=None):
     return parameter.quantity.value
 
 
+def _axis_offset(feature, line):
+    """Largest perpendicular offset over the finite feature, or its axis origin."""
+    offsets = [
+        feature["origin"] + sign * feature["axis"] * feature.get("length", 0) / 2 - line["origin"]
+        for sign in (-1, 1)
+    ]
+    return max(float(np.linalg.norm(p - np.dot(p, line["axis"]) * line["axis"])) for p in offsets)
+
+
 def verify_geometry(blueprint, recipe, *, policy=None):
     """Return hash-bound findings; no writes or model/simulator calls."""
     policy = policy or VerificationPolicy()
     if not isinstance(blueprint, AssemblyBlueprint):
         return {
-            "schema_version": "envcreator.geometric-verification/1",
+            "schema_version": VERSION,
             "status": "not_applicable",
             "checks": [],
             "feedback": [],
@@ -169,7 +222,11 @@ def verify_geometry(blueprint, recipe, *, policy=None):
         for binding in recipe.interface_bindings:
             try:
                 features[binding.interface_id] = _feature(
-                    interfaces[binding.interface_id], binding, solids, offsets
+                    interfaces[binding.interface_id],
+                    binding,
+                    solids,
+                    offsets,
+                    {j.name: j for j in blueprint.joints},
                 )
             except ValueError as error:
                 feature_errors[binding.interface_id] = str(error)
@@ -209,6 +266,16 @@ def verify_geometry(blueprint, recipe, *, policy=None):
                 failure_domain="assembly_description",
             )
             return row
+        error = relation_error(req.type, [interfaces[i].kind for i in ids])
+        if error:
+            row.update(
+                message=error,
+                repair_target="verifier" if error == "unsupported relation" else "blueprint",
+                failure_domain="unsupported_geometry"
+                if error == "unsupported relation"
+                else "assembly_description",
+            )
+            return row
         if any(i not in features for i in ids):
             row["message"] = "; ".join(
                 f"{i}: {feature_errors.get(i, 'missing actual-solid feature binding')}"
@@ -233,39 +300,31 @@ def verify_geometry(blueprint, recipe, *, policy=None):
         angle = math.acos(cosine)
         row["metrics"]["axis_angle_rad"] = angle
         if req.type in {"orthogonal", "parallel", "coplanar"}:
-            if any(f["kind"] != "plane" for f in fs):
-                raise ValueError("plane relation requires two explicit plane faces")
-            residual = abs(math.pi / 2 - angle) if req.type == "orthogonal" else angle
+            # Plane-plane compares normals; line-plane compares the line to the
+            # plane itself, so the angular meaning is reversed for mixed roles.
+            mixed = (a["kind"] == "plane") != (b["kind"] == "plane")
+            relation_angle = math.pi / 2 - angle if mixed else angle
+            residual = direction_residual(req.type, [a["kind"], b["kind"]], a["axis"], b["axis"])
             ok = residual <= angle_limit
-            row["metrics"]["angular_residual_rad"] = residual
+            row["metrics"].update(angular_residual_rad=residual, relation_angle_rad=relation_angle)
             if req.type == "coplanar":
                 distance = abs(float(np.dot(a["origin"] - b["origin"], a["axis"])))
                 row["metrics"]["plane_offset_m"] = distance
                 ok = ok and distance <= offset_limit
             row.update(
                 status="passed" if ok else "failed",
-                message="analytic plane relation " + ("satisfied" if ok else "violated"),
+                message="analytic feature direction/plane relation "
+                + ("satisfied" if ok else "violated"),
             )
             return row
-        if req.type not in {"coaxial", "clearance", "revolute", "cylindrical"}:
-            row.update(
-                message="relation has no geometric verifier in this version",
-                repair_target="verifier",
-                failure_domain="unsupported_geometry",
-            )
-            return row
-        if any(f["kind"] not in {"cylinder_inner", "cylinder_outer"} for f in fs):
-            raise ValueError("axis/clearance check requires actual cylindrical surfaces")
-        endpoints = [a["origin"] + sign * a["axis"] * a["length"] / 2 for sign in (-1, 1)]
-        radial = max(
-            float(
-                np.linalg.norm((p - b["origin"]) - np.dot(p - b["origin"], b["axis"]) * b["axis"])
-            )
-            for p in endpoints
-        )
+        radial = _axis_offset(a, b)
         row["metrics"]["axis_offset_over_feature_m"] = radial
-        ok = angle <= angle_limit and radial <= offset_limit
         if req.type == "coaxial":
+            # Also measure B against A: avoid depending on interface ordering
+            # when one feature is long or the other is an unbounded joint axis.
+            radial = max(radial, _axis_offset(b, a))
+            row["metrics"]["axis_offset_over_feature_m"] = radial
+            ok = angle <= angle_limit and radial <= offset_limit
             row.update(
                 status="passed" if ok else "failed",
                 message="finite-feature axis alignment " + ("satisfied" if ok else "violated"),
@@ -313,9 +372,24 @@ def verify_geometry(blueprint, recipe, *, policy=None):
             and clearance >= minimum - 1e-12
             and (maximum is None or nominal <= maximum + 1e-12)
         )
+        if source == "mate" and req.type in {"revolute", "cylindrical"}:
+            for joint in blueprint.joints:
+                if joint.mate_id != req.id:
+                    continue
+                axis = np.array(joint.axis_child)
+                origin = offsets[joint.child]
+                errors = [_axis_offset(surface, {"origin": origin, "axis": axis}) for surface in fs]
+                joint_angle = max(
+                    math.acos(float(np.clip(abs(np.dot(axis, f["axis"])), 0, 1))) for f in fs
+                )
+                row["metrics"].update(
+                    joint_axis_angle_rad=joint_angle, joint_axis_offset_m=max(errors)
+                )
+                ok = ok and joint_angle <= angle_limit and max(errors) <= offset_limit
         row.update(
             status="passed" if ok else "failed",
-            message="finite shaft-hole fit " + ("satisfied" if ok else "violated"),
+            message="finite shaft-hole fit and declared joint alignment "
+            + ("satisfied" if ok else "violated"),
         )
         return row
 
@@ -345,7 +419,7 @@ def verify_geometry(blueprint, recipe, *, policy=None):
         else "not_applicable"
     )
     report = {
-        "schema_version": "envcreator.geometric-verification/1",
+        "schema_version": VERSION,
         "status": status,
         "object_id": blueprint.object_id,
         "checks": rows,
@@ -355,7 +429,7 @@ def verify_geometry(blueprint, recipe, *, policy=None):
             "recipe": digest(recipe.model_dump(mode="json")),
         },
         "policy": policy.model_dump(mode="json"),
-        "scope": "analytic builder recipe, finite features, assembled reference pose only",
+        "scope": "analytic builder recipe, actual solid features/ideal joint axes, translation-only reference pose; no contact proof",
         "exported_mesh_status": "not_run",
         "physics_status": "not_run",
     }
@@ -374,9 +448,10 @@ def persist_verification(output, blueprint, recipe, *, require_pass=False, polic
 def bound_feedback(report, blueprint, recipe=None):
     """Do not repair a candidate from an altered or unrelated verifier result."""
     content = {k: v for k, v in report.items() if k != "report_sha256"}
-    if report.get("schema_version") != "envcreator.geometric-verification/1" or report.get(
-        "report_sha256"
-    ) != digest(content):
+    if report.get("schema_version") not in {
+        "envcreator.geometric-verification/1",
+        VERSION,
+    } or report.get("report_sha256") != digest(content):
         raise ValueError("geometric feedback report is missing or altered")
     expected = report.get("input_sha256", {})
     if expected.get("blueprint") != digest(blueprint.model_dump(mode="json")):

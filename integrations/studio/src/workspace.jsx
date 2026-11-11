@@ -126,6 +126,7 @@ function WorkflowView({data,tab,onAsk,busy}){
     <div className="ec-human-actions">
       {allowed.some(a=>["sample_video","select_target","accept_structure"].includes(a))&&<button disabled={busy} onClick={()=>ask("根据已附原始画面、证据和未决项，完成当前需要的判断并继续固定流程。")}>确认方向并继续</button>}
       {allowed.includes("revise_structure")&&<button disabled={busy} onClick={()=>ask("结合当前审核指出的具体问题重新检查结构假设；不要为了编译而补造未知量。")}>重新检查结构</button>}
+      {allowed.includes("repair_constraints")&&<button disabled={busy} onClick={()=>ask("从具体审核问题中选择需要修正的几何约束 ID，使用 repair_constraints 局部修订；保留其他关系、零件、配合与未知参数，不能用改写全文或放宽要求绕过审核。")}>局部修正关系</button>}
       {allowed.includes("propose_build")&&<button disabled={busy} onClick={()=>ask("在不改写原始未知量的前提下，提出独立的候选构建假设。逐项说明试验尺度、关节参考约定与行程等假设的理由，不将它们当作视频测量；保留原有几何审核。")}>尝试带假设的候选</button>}
       {allowed.includes("revisit_video")&&<button disabled={busy} onClick={()=>ask("根据失败诊断寻找原视频中的新证据，说明需要什么画面，再选择采样时间段。新旧对象身份需要重新确认。")}>回看视频补充证据</button>}
       {allowed.includes("stop")&&<button disabled={busy} onClick={()=>ask("停止这次工作流，保留未决项、候选和审核记录。")}>保留结果并停止</button>}

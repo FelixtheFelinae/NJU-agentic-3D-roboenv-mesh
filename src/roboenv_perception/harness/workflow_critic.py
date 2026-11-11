@@ -15,10 +15,10 @@ def finding(stage, status, report, *, report_ref, candidate, observation_refs):
         else:
             scope = "structure"
     else:
-        field = {"blueprint": "issues", "blueprint_review": "findings"}.get(stage, "issues")
+        field = {"blueprint": "issues", "blueprint_repair": "issues", "blueprint_review": "findings"}.get(stage, "issues")
         issues = report.get(field, [])
         scope = "geometry" if stage == "build_hypothesis_audit" else "structure_or_evidence" if stage in {
-            "blueprint", "blueprint_review", "geometry_review",
+            "blueprint", "blueprint_repair", "blueprint_review", "geometry_review",
         } else "structure" if stage == "assembly_audit" else "physical_diagnosis"
     return {
         "stage": stage, "status": status, "report_ref": report_ref,

@@ -226,3 +226,47 @@ needs_revision，交给已有 Critic/修订路径，不作为来源错误提前�
 
 代码路径、真实笔记本/自行车输出及回归结果见
 [P0-4 记录](../reports/FIXED_WORKFLOW_P04_20261111.md)。
+
+## P0-5：按约束 ID 局部修订
+
+原生 `workflow_advance` 增加 `repair_constraints`：
+
+```json
+{"action":"repair_constraints","revision":3,"reason":"修正机身正交关系的绑定", "constraint_ids":["gc_base_orthogonality"]}
+```
+
+revision 必须取当前状态，constraint_ids 为原描述中 1–4 个不同的几何约束。
+该动作在 structure/recovery 阶段提供，消耗已有修订轮数预算；
+旧 Blueprint、没有几何约束或预算耗尽时不提供。
+GUI 增加“局部修正关系”，通过原生 DSH 提交自然语言要求，不直接修改描述。
+
+`construction/constraint_repair.py` 使用独立的窄输出格式：
+source_blueprint_sha256、replacements、add_interfaces、rationale。
+每个 replacement 只能有 id、interface_refs、description；模型没有权限返回或改变
+type、part_refs、parameters、basis、evidence_refs。这些字段由程序从原描述复制。
+零件、Mate、关节、尺寸、Intake、状态、已有接口等其余内容同样保留。
+
+新增接口仅允许相关零件的 plane/axis/edge，标明 assumed/inferred，
+不允许接触硬件、已知位置、参数尺寸、覆盖旧接口或无关接口。
+新来源必须已有记录，未知接触不升级为轴孔。已有轴线—边缘要求不能换成其他特征组合。
+所选关系须通过相同角色、方向、引用审核；方向关系不能靠省略方向通过。
+
+调用链为固定步骤：
+Agent 选择 ID → blueprint_repair → 单次内部 VLM 提案 → 确定性应用检查
+→ 原有描述自检查 → 原有独立结构审核 → 结构前检。
+局部修订复用已接受 Intake 和原始证据，不再次生成完整描述或运行感知。
+更改对象理解、连接拓扑或 Mate 时仍使用 revise_structure / revisit_video。
+
+失败不在组件内无限重试。提案拒绝时保存 proposal/trace、原描述的完整副本、
+selfcheck 与 constraint_repair 报告并返回 needs_revision。
+若提案已应用但模型自检查拒绝或返回格式/哈希错误，保留未通过审核的候选，
+同样返回 needs_revision。网络超时等执行失败传播，由原有阶段恢复机制处理。
+Workflow 记录来源、原生调用关联、修订 ID 和 Critic，并在审核失败时返回 recovery。
+中断恢复复用已完成的上游阶段；未完成的局部阶段仍可能重新请求模型。
+
+调试组件名为 blueprint_repair，sources 为 blueprint 与 evidence，
+params.constraint_ids 和可选 feedback。默认 Agent 工具面仍只有 Workflow 工具。
+阶段缓存纳入 constraint-repair 版本；当前版本 `/2`。
+
+这只修复具体关系的表达/绑定，不是几何生成成功或机械正确的证明。
+真实案例、失败记录及测试见 [P0-5 记录](../reports/FIXED_WORKFLOW_P05_20261111.md)。

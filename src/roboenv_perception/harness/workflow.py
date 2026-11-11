@@ -29,8 +29,8 @@ VIDEO = {".mp4", ".mov", ".mkv", ".webm"}
 ACTIONS = {
     "sampling": ["sample_video", "stop"],
     "target": ["select_target", "revisit_video", "stop"],
-    "structure": ["accept_structure", "propose_build", "revise_structure", "revisit_video", "stop"],
-    "recovery": ["propose_build", "revise_structure", "revisit_video", "stop"],
+    "structure": ["accept_structure", "propose_build", "repair_constraints", "revise_structure", "revisit_video", "stop"],
+    "recovery": ["propose_build", "repair_constraints", "revise_structure", "revisit_video", "stop"],
     "physical_recovery": ["revisit_video", "stop"],
 }
 
@@ -47,6 +47,7 @@ class Decision(BaseModel):
         "resume", "stop", "sample_video", "select_target", "accept_structure",
         "revise_structure", "revisit_video",
         "propose_build",
+        "repair_constraints",
     ]
     revision: int | None = Field(default=None, ge=0)
     sampling: dict | None = None
@@ -54,6 +55,7 @@ class Decision(BaseModel):
     reason: str | None = Field(default=None, min_length=1, max_length=1500)
     evidence_refs: list[str] | None = Field(default=None, min_length=1, max_length=16)
     hypothesis: BuildHypothesis | None = None
+    constraint_ids: list[str] | None = Field(default=None, min_length=1, max_length=4)
 
 
 def atomic_json(path, value):
@@ -147,6 +149,10 @@ class Workflow:
             from .geometric_verifier import VERSION as GEOMETRY_VERSION
 
             verifier_key = {"verifier_version": GEOMETRY_VERSION}
+        elif operation == "blueprint_repair":
+            from ..construction.constraint_repair import VERSION as REPAIR_VERSION
+
+            verifier_key = {"repair_version": REPAIR_VERSION}
         bindings = {}
         for role, (receipt, export) in sources.items():
             path = self.ref(receipt, export)
@@ -246,7 +252,13 @@ class Workflow:
         if not self.video:
             actions = [v for v in actions if v != "revisit_video"]
         if self.state["round"] >= self.settings.max_revisions:
-            actions = [v for v in actions if v not in {"revise_structure", "revisit_video"}]
+            actions = [v for v in actions if v not in {"revise_structure", "repair_constraints", "revisit_video"}]
+        if "repair_constraints" in actions:
+            from ..construction.assembly_blueprint import AssemblyBlueprint
+
+            bp = parse_blueprint(read_json(self.ref(self.state["blueprint"], "blueprint"))) if self.state.get("blueprint") else None
+            if not isinstance(bp, AssemblyBlueprint) or not bp.geometric_constraints:
+                actions.remove("repair_constraints")
         if (not self.state.get("blueprint") or not self.state.get("blueprint_review") or
                 self.state["blueprint_review"]["status"] != "review_passed" or
                 self.state["build_attempts"] > self.settings.max_revisions):
@@ -286,6 +298,7 @@ class Workflow:
         required = {"sample_video": {"sampling"}, "revisit_video": {"sampling", "reason"},
                     "select_target": {"object_id", "reason"}, "revise_structure": {"reason"},
                     "accept_structure": {"reason"}, "stop": {"reason"},
+                    "repair_constraints": {"reason", "constraint_ids"},
                     "propose_build": {"reason", "hypothesis"}}[action]
         optional = {"evidence_refs"} if action == "select_target" else set()
         if set(raw) - optional != required | {"action", "revision"} or any(
@@ -318,11 +331,14 @@ class Workflow:
             path = self.ref(s["blueprint"], "blueprint")
             if decision.hypothesis.source_blueprint_sha256 != sha256(path):
                 raise ValueError("构建假设未绑定当前语义描述")
-            from ..construction.assembly_blueprint import parse_blueprint
-
             hypothesis.apply(parse_blueprint(read_json(path)),
                              decision.hypothesis.model_dump(mode="json"),
                              {v["ref"] for v in s["target"]["views"]})
+        if action == "repair_constraints":
+            from ..construction.constraint_repair import select_constraints
+
+            select_constraints(parse_blueprint(read_json(self.ref(s["blueprint"], "blueprint"))),
+                               decision.constraint_ids)
         s["history"].append({
             "revision": s["revision"], "round": s["round"], "phase": s["phase"],
             **decision.model_dump(exclude_none=True), "actor": actor,
@@ -352,6 +368,9 @@ class Workflow:
         elif action == "revise_structure":
             self.new_round("structure", decision.reason)
             self.phase("design", previous=s["blueprint"])
+        elif action == "repair_constraints":
+            self.new_round("constraints", decision.reason)
+            self.phase("design", previous=s["blueprint"], pending_constraint_ids=decision.constraint_ids)
         elif action == "accept_structure":
             self.phase("construction")
         elif action == "propose_build":
@@ -377,6 +396,7 @@ class Workflow:
             build_blueprint=None, build_review=None, pending_hypothesis=None,
             pending_fusion=None, build_attempts=0,
             structure_readiness=None,
+            pending_constraint_ids=None,
         )
 
     def record(self, receipt, role, candidate, report_name=None):
@@ -461,7 +481,13 @@ class Workflow:
                 feedback += ["旧候选诊断（不是观测证据）：" + issue for issue in critic.feedback(diagnostic)[:12]]
             if s.get("previous"):
                 sources["previous"] = (s["previous"], "blueprint")
-            bp = self.stage("blueprint", sources, object_id=target, params={"feedback": feedback})
+            if s.get("pending_constraint_ids"):
+                bp = self.stage("blueprint_repair", {
+                    **observed, "blueprint": (s["previous"], "blueprint"),
+                }, object_id=target, params={"constraint_ids": s["pending_constraint_ids"], "feedback": feedback})
+                self.record(bp, "constraint_repair", self.candidate(blueprint=bp), "constraint_repair.json")
+            else:
+                bp = self.stage("blueprint", sources, object_id=target, params={"feedback": feedback})
             s.update(blueprint=bp, blueprint_review=None)
             if bp["status"] != "needs_revision":
                 review = self.stage("blueprint_review", {**observed, "blueprint": (bp, "blueprint")}, object_id=target)
@@ -656,7 +682,7 @@ class Workflow:
             blueprint_identity = {"sha256": sha256(path), "role": "canonical_description"}
             bp = {k: source.get(k) for k in ("kind", "coordinate_units", "target_dimensions_m")}
             bp.update({k: source.get(k, [])[:16] for k in (
-                "part_definitions", "part_instances", "interfaces", "joints", "mates", "hypotheses", "unresolved",
+                "part_definitions", "part_instances", "interfaces", "joints", "mates", "geometric_constraints", "hypotheses", "unresolved",
             )})
         construction = (
             read_json(self.ref(s["build_blueprint"], "build_hypothesis"))
@@ -670,7 +696,7 @@ class Workflow:
             ]
         history = []
         for row in s["history"][-8:]:
-            item = {k: row[k] for k in ("revision", "round", "phase", "action", "reason", "object_id", "actor") if k in row}
+            item = {k: row[k] for k in ("revision", "round", "phase", "action", "reason", "object_id", "constraint_ids", "actor") if k in row}
             if row.get("hypothesis"):
                 item["hypothesis"] = {
                     "source_blueprint_sha256": row["hypothesis"]["source_blueprint_sha256"],

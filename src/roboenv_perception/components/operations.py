@@ -70,6 +70,7 @@ def run(
         "perception_edit": {"frame_id", "merge", "exclude", "labels"},
         "scope_apply": {"objects"},
         "blueprint": {"blueprint", "measurements", "feedback"},
+        "blueprint_repair": {"constraint_ids", "feedback"},
         "geometry": {"recipe", "feedback"},
         "gaussian": {"iterations", "resume"},
         "overview": {"frame_id"},
@@ -322,6 +323,20 @@ def run(
             status = checked["status"]
             write_json(output / "blueprint/identity.json", row)
             exports = {"blueprint": "blueprint/blueprint.json"}
+        elif operation == "blueprint_repair":
+            from ..construction.constraint_repair import author_repair
+
+            blueprint = parse_blueprint(read_json(paths["blueprint"]))
+            _, data, images = observation(paths["evidence"], object_id)
+            if blueprint.object_id != data["object_id"]:
+                raise ValueError("局部修订与证据对象身份不匹配")
+            checked = author_repair(
+                make_vlm(config.vlm, system=DESIGN_SYSTEM), blueprint, paths["blueprint"],
+                params.get("constraint_ids"), data, images, output / "blueprint",
+                task=task, feedback=feedback,
+            )
+            exports = {"blueprint": "blueprint/blueprint.json", "constraint_repair": "blueprint"}
+            status = checked["status"]
         elif operation == "blueprint_review":
             _, data, images = observation(paths["evidence"], object_id)
             blueprint = parse_blueprint(read_json(paths["blueprint"]))

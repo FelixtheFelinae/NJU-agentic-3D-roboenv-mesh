@@ -62,6 +62,10 @@ CATALOG = {
         ["blueprint_review"],
         ["construction_config"],
     ),
+    "blueprint_repair": (
+        "局部修订几何关系", {"blueprint": "blueprint", "evidence": "evidence"},
+        ["blueprint", "constraint_repair"], ["construction_config"],
+    ),
     "geometry": (
         "设计外形",
         {"blueprint": "blueprint", "evidence": "evidence"},

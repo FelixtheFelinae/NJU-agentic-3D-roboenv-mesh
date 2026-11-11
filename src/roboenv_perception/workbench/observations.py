@@ -80,6 +80,7 @@ def agent_observation(run):
         "physics": "physics.json",
         "assembly": "assembly_validation.json",
         "geometric_verification": "geometric_verification.json",
+        "constraint_repair": "constraint_repair.json",
         "task_review": "task_scope.json",
         "cameras": "cameras.json",
         "gaussian": "background_model.json",

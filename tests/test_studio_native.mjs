@@ -20,6 +20,8 @@ test('completed native component results are lossless JSON with explicit missing
       backendURL:'http://127.0.0.1:'+server.address().port+'/',tokenFile:join(root,'token'),maxWallSeconds:60,debugComponentTools:true,
     });
     assert.ok(tools.has('envcreator_geometry_audit'));
+    assert.ok(tools.has('envcreator_blueprint_repair'));
+    assert.match(tools.get('envcreator_blueprint_repair').description,/constraint_ids/);
     assert.match(tools.get('envcreator_geometry_audit').description,/finite overlap/);
     assert.match(tools.get('envcreator_geometry').description,/sources.geometric_verification/);
     const value=await tools.get('envcreator_reference_validate').execute({sources:{reference:'source'},params:{stage:'qa'}},
@@ -86,6 +88,8 @@ test('workflow is the default tool surface and source/candidate images use nativ
     const tool=tools.get('envcreator_workflow_advance');
     const decisionSchema=tool.parameters.properties.params.properties;
     assert.ok(decisionSchema.action.enum.includes('propose_build'));
+    assert.ok(decisionSchema.action.enum.includes('repair_constraints'));
+    assert.equal(decisionSchema.constraint_ids.maxItems,4);
     assert.equal(decisionSchema.evidence_refs.maxItems,16);
     assert.ok(decisionSchema.hypothesis.required.includes('source_blueprint_sha256'));
     const value=await tool.execute({parent_id:'original',params:{action:'resume'}},

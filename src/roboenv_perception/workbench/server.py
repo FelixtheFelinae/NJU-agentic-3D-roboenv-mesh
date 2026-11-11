@@ -286,6 +286,7 @@ def create_app(settings, token):
                     "segment": "optional candidates: full Inventory.objects array with cNNN IDs/category/prompt/bbox_xyxy_norm; reruns actual SAM",
                     "scope_apply": "objects: every evidence asset_id exactly once with action build/background/exclude/unresolved and reason. Explicit selection, not independent acceptance.",
                     "blueprint": "optional full validated blueprint under params.blueprint; always same object/evidence identity",
+                    "blueprint_repair": "constraint_ids: 1–4 existing geometric constraint IDs. One bounded internal proposal; other fields remain frozen. Use workflow repair_constraints with reason and constraint_ids on the default surface.",
                     "geometry": "optional full validated recipe under params.recipe; preserve frozen standards",
                     "gaussian": "optional iterations; resume=true plus sources.checkpoint for an existing complete checkpoint; matching original settings required",
                     "overview": "optional frame_id; calibrated actual 3DGS view, no generated panorama",

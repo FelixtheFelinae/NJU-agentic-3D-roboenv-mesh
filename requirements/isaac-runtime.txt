@@ -1,0 +1,11 @@
+# Install into a separate Python 3.12 environment. See docs/SIMULATION_RUNTIME.md.
+--index-url https://pypi.org/simple
+--extra-index-url https://pypi.nvidia.com
+isaaclab==3.0.0
+isaacsim[all]==6.2.0.0
+# Include the complete official physics, Kit and SDK extension caches.
+isaacsim-extscache-physics==6.2.0.0
+isaacsim-extscache-kit==6.2.0.0
+isaacsim-extscache-kit-sdk==6.2.0.0
+# Newton 1.6.x requires MuJoCo 3.12; standalone/Artisan use MuJoCo 4 separately.
+mujoco==3.12.0

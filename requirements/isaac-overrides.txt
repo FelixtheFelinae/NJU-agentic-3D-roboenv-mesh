@@ -1,0 +1,3 @@
+# Upstream conflict: Lab 3 requires >=2.8, Sim 6.2 kernel pins 2.7.
+# This is an explicit local exception, not an upstream supported dependency set.
+urllib3==2.8.0

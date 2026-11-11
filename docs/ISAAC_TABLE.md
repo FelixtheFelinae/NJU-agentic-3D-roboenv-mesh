@@ -50,11 +50,16 @@ G1 官方参数为站立外形 1320×450×200mm，见 [官方页面](https://www
 
 ## 命令与运行环境
 
-感知/输入准备继续使用项目 Python 3.12 环境。Isaac Sim 5.1 worker 使用独立 Python 3.11；
-不要把 Isaac Sim 安装到当前感知 `.venv`，也不修改既有 Conda 环境的包。
+感知/输入准备继续使用项目 Python 3.12 环境。2026-11-10 开始迁移至独立
+Python 3.12、Isaac Sim 6.2 / Lab 3.0；版本清单见
+[Isaac 依赖](../requirements/isaac-runtime.txt)。不要把 Isaac 安装到当前感知 `.venv`。
+Lab 3 与 Sim 6.2 对 urllib3 的要求冲突；本机使用显式
+[覆盖配置](../requirements/isaac-overrides.txt)，不能据此宣称上游依赖完全兼容。
+`execution/isaac_runtime.py` 保留 PhysX 后端，并转换 Lab 3 的四元数顺序；
+单元测试覆盖兼容分支，真实物理实验仍按每次运行的报告判定。
 
-当前本机 worker 解释器位于 `~/.local/share/roboenv/isaac-env/bin/python`，通过 `.pth`
-读取已安装的 Isaac Sim 5.1 包和 Isaac Lab 源码。未激活旧 Conda 环境，未安装或升级其依赖。
+本机 worker 的稳定入口为 `~/.local/share/roboenv/isaac-env/bin/python`。
+旧 Python 3.11 / Sim 5.1 的共享包与源码 `.pth` 接法已退役，不能照旧重建。
 正式 worker 使用 `--portable-root` 将 Kit 的日志和运行数据放在本次输出旁的 `kit-runtime`。
 该方式依赖本机安装位置，不是可移植的依赖锁；迁移主机时应单独安装兼容的 Isaac Sim/Lab。
 

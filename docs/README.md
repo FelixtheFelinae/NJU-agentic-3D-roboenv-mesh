@@ -2,6 +2,8 @@
 
 当前主线是 `scene-harness` 的实验性自动构建；感知和背景阶段也可单独调用。先看 [仓库首页](../README.md) 和 [代码结构](ARCHITECTURE.md)。
 
+跨对话继续开发时，先读 [Reconstruction Harness 当前进度与 TODO](RECONSTRUCTION_HARNESS_HANDOFF_TODO.md)，核对实现基线、真实失败和正在进行的审查。
+
 ## 当前方法与使用
 
 | 环节 | 文档 |

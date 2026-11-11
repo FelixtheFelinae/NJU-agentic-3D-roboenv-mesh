@@ -93,4 +93,4 @@ API 配置暂留空，尚未执行真实 VLM/SAM 推理或人工数据评估。
 开发依赖、官方 SAM 3 源码、CUDA 运算、项目 CUDA IoU、SAM 3 Triton 连通域和
 NVENC 编码/解码均已在本机验证通过。完整环境中的测试为 41 项通过、1 项按定义
 跳过（本机已安装 SAM，不适用“未安装 SAM”测试），`pip check` 无依赖冲突。
-详见 [VALIDATION](VALIDATION.md) 的 2026-10-20 记录。
+详见 [VALIDATION](history/VALIDATION.md) 的 2026-10-20 记录。

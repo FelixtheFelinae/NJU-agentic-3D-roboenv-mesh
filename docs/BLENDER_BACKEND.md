@@ -65,9 +65,10 @@ export_mesh("body", obj, rgba=(0.4, 0.4, 0.4, 1), material_class="matte_plastic"
 不会传入独立 Blender 子进程。
 
 ```bash
-PYTHONPATH=src /home/felixz/real2sim/R2S2B/sources/Artisan/.artisan/venv/bin/python \
-  scripts/build_ipad_audio_assets.py \
+PYTHONPATH=src /absolute/path/Artisan/.artisan/venv/bin/python \
+  -m roboenv_perception.experiments.white_table.build_assets \
   --root outputs/white-table-redo-20261024/assets-blender-NEW \
+  --artisan-python /absolute/path/Artisan/.artisan/venv/bin/python \
   --mesh-backend blender \
   --tablet-texture outputs/white-table-redo-20261024/tablet_top.png \
   --scene-layout outputs/white-table-redo-20261024/assets-v2-20261026/scene-build-spec.json

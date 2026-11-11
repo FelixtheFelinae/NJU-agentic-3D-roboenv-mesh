@@ -19,9 +19,9 @@
   这是本项目的适配器，使用 Artisan SDK/编译器，不等同于直接运行 Artisan 原生 provider harness。
 - 独立的 Artisan Python 执行模型、基线 QC，并导出 URDF、MJCF 和 USD。
   Coding 的 `run_tests()` 不放业务验收断言；业务验收归 Review。
-- `construction/isaac_asset_worker.py`：导入实际 USD，在 Isaac Lab 中验证三个真实资产。
+- `experiments/wood_table/isaac_asset_worker.py`：导入实际 USD，在 Isaac Lab 中验证三个真实资产。
   USD 适配保留 SDK 的几何、碰撞分解和惯量，展开嵌套刚体层级，隐藏碰撞代理，启用真实视觉网格。
-- `construction/isaac_scene_check.py`：另一个进程重新打开最终场景，不写入姿态或关节角，再运行物理。
+- `experiments/wood_table/isaac_scene_check.py`：另一个进程重新打开最终场景，不写入姿态或关节角，再运行物理。
   这一检查用于捕获“脚本中正确、导出场景中丢失初始关节状态”的问题。
 - Review 核对模型、输入网格、USD、依赖文件与物理报告哈希。QA 中有效失败反馈候选缺陷；
   QA 解释器异常反馈测试脚本错误。协议错误和物理失败不能变成 PASS。
@@ -58,16 +58,16 @@ Artisan 参考：本机 `/home/felixz/real2sim/R2S2B/sources/Artisan/sdk/_docs/m
 输出目录中已有候选时先备份；不要用准备步骤覆盖已审查资产。
 
 ```bash
-.venv/bin/python scripts/build_video_assets.py fit --root outputs/user-scene-assets-20261023
-.venv/bin/python scripts/build_video_assets.py prepare --root outputs/user-scene-assets-20261023
+.venv/bin/python -m roboenv_perception.experiments.wood_table.build_assets fit --root outputs/user-scene-assets-20261023
+.venv/bin/python -m roboenv_perception.experiments.wood_table.build_assets prepare --artisan /absolute/path/Artisan --root outputs/user-scene-assets-20261023
 
 for asset_id in asset-0003 asset-0001 asset-0002; do
-  .venv/bin/python scripts/build_video_assets.py code \
-    --root outputs/user-scene-assets-20261023 --asset "$asset_id"
+  .venv/bin/python -m roboenv_perception.experiments.wood_table.build_assets code \
+    --root outputs/user-scene-assets-20261023 --asset "$asset_id" --artisan /absolute/path/Artisan
 done
 
-.venv/bin/python scripts/build_video_assets.py appearance --root outputs/user-scene-assets-20261023
-.venv/bin/python scripts/evaluate_video_assets.py --root outputs/user-scene-assets-20261023
+.venv/bin/python -m roboenv_perception.experiments.wood_table.build_assets appearance --root outputs/user-scene-assets-20261023
+.venv/bin/python -m roboenv_perception.experiments.wood_table.evaluate_assets --root outputs/user-scene-assets-20261023
 
 # 以下输出目录必须不存在；旧运行保留到其他名称。
 .venv/bin/python scripts/run_table_sim.py --worker assets \
@@ -78,10 +78,10 @@ done
   --output outputs/user-scene-assets-20261023/scene-reload
 
 for asset_id in asset-0003 asset-0001 asset-0002; do
-  .venv/bin/python scripts/build_video_assets.py review \
-    --root outputs/user-scene-assets-20261023 --asset "$asset_id"
+  .venv/bin/python -m roboenv_perception.experiments.wood_table.build_assets review \
+    --root outputs/user-scene-assets-20261023 --asset "$asset_id" --artisan /absolute/path/Artisan
 done
-.venv/bin/python scripts/build_video_assets.py scene-review --root outputs/user-scene-assets-20261023
+.venv/bin/python -m roboenv_perception.experiments.wood_table.build_assets scene-review --root outputs/user-scene-assets-20261023
 ```
 
 API 配置沿用本地设计配置，凭据仅从 `.env.local` 读取。子进程移除 API key/token 等环境变量。

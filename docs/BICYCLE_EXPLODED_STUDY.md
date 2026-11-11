@@ -2,7 +2,7 @@
 
 2026-10-26 开始，2026-10-27 整理。使用原视频 RGB 帧重新识别，未调用原有自行车生成器、网格、零件数或传动参数。
 
-`scripts/prepare_bicycle_exploded_evidence.py` 从原始帧提取 12 个观察区域，保存时间戳、裁剪坐标和哈希。识别由本次多模态图像审阅完成；未运行专门训练的螺钉检测器，也未用 SAM 或图像增强生成不可见细节。`scripts/blender/bicycle_exploded_study.py` 按这些观察重新建立零件和总成，用 Blender 输出装配图、分层爆炸图和局部图。
+`-m roboenv_perception.experiments.bicycle.prepare_exploded_evidence` 从原始帧提取 12 个观察区域，保存时间戳、裁剪坐标和哈希。识别由本次多模态图像审阅完成；未运行专门训练的螺钉检测器，也未用 SAM 或图像增强生成不可见细节。`scripts/blender/bicycle_exploded_study.py` 按这些观察重新建立零件和总成，用 Blender 输出装配图、分层爆炸图和局部图。
 
 模型拆分到轮轴端紧固件、候选轴承及垫圈、中轴轴芯及碗组、曲柄中心螺钉、脚踏轴、刹把枢轴、座管快拆、前叉内外管及密封边界、挡泥板支撑、链罩螺钉等。车架焊管和车篮网格按总成保留。链条按销轴、滚子和侧板展开，但侧板采用圆边杆状近似，未建真实板孔和压装配合。
 
@@ -32,7 +32,7 @@
 复现：
 
 ```bash
-.venv/bin/python scripts/prepare_bicycle_exploded_evidence.py \
+.venv/bin/python -m roboenv_perception.experiments.bicycle.prepare_exploded_evidence \
   --source outputs/bicycle-ground-20261026/perception/inputs \
   --output outputs/bicycle-exploded-study-20261026
 

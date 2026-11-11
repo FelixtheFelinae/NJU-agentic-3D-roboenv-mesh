@@ -32,15 +32,20 @@ def main():
         parser.error("--record-orbit-seconds must be finite and nonnegative")
     if args.record_orbit_seconds and args.worker != "audio-scene-check":
         parser.error("--record-orbit-seconds requires --worker audio-scene-check")
-    worker_name = {"table": "isaac_table_worker.py", "assets": "isaac_asset_worker.py",
-                   "scene-check": "isaac_scene_check.py", "hinge": "isaac_hinge_worker.py",
-                   "robot": "isaac_robot_worker.py", "audio-assets": "isaac_audio_scene_worker.py",
-                   "audio-scene-check": "isaac_audio_scene_worker.py",
-                   "bicycle-build": "isaac_bicycle_worker.py",
-                   "bicycle-check": "isaac_bicycle_worker.py",
-                   "drivetrain-build": "isaac_drivetrain_worker.py",
-                   "drivetrain-check": "isaac_drivetrain_worker.py"}[args.worker]
-    worker = Path(__file__).resolve().parents[1]/"src/roboenv_perception/construction"/worker_name
+    worker_name = {
+        "table": "construction/isaac_table_worker.py",
+        "assets": "experiments/wood_table/isaac_asset_worker.py",
+        "scene-check": "experiments/wood_table/isaac_scene_check.py",
+        "hinge": "experiments/wood_table/isaac_hinge_worker.py",
+        "robot": "experiments/g1/isaac_robot_worker.py",
+        "audio-assets": "experiments/white_table/isaac_audio_scene_worker.py",
+        "audio-scene-check": "experiments/white_table/isaac_audio_scene_worker.py",
+        "bicycle-build": "experiments/bicycle/isaac_bicycle_worker.py",
+        "bicycle-check": "experiments/bicycle/isaac_bicycle_worker.py",
+        "drivetrain-build": "experiments/bicycle/isaac_drivetrain_worker.py",
+        "drivetrain-check": "experiments/bicycle/isaac_drivetrain_worker.py",
+    }[args.worker]
+    worker = Path(__file__).resolve().parents[1]/"src/roboenv_perception"/worker_name
     command = [str(args.python), "-u", str(worker)]
     if args.worker.startswith("audio-"):
         command.append("build" if args.worker == "audio-assets" else "check")

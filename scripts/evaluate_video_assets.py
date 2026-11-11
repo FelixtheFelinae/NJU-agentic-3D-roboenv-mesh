@@ -1,19 +1,13 @@
-"""Reproject completed geometry into all video masks; separate fit and unused views."""
+"""Compatibility entry point; implementation: roboenv_perception.experiments.wood_table.evaluate_assets."""
 
-import argparse
-from pathlib import Path
-
-from roboenv_perception.construction.video_asset_workflow import evaluate
+from importlib import import_module
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--root', type=Path, required=True)
-    parser.add_argument('--source', type=Path, default=Path('outputs/user-video-build-20261022'))
-    args = parser.parse_args()
-    report = evaluate(args.root, args.source)
-    print({a: {k: v for k, v in r.items() if k != 'views'} for a, r in report['assets'].items()})
+def __getattr__(name):
+    return getattr(import_module('roboenv_perception.experiments.wood_table.evaluate_assets'), name)
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    import runpy
+
+    runpy.run_module('roboenv_perception.experiments.wood_table.evaluate_assets', run_name="__main__")

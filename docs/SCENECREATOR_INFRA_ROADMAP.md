@@ -10,14 +10,14 @@
 
 ## 工作流并行边界
 
-保持 SAM、VLM、COLMAP、3DGS、Blender、Artisan 和物理验证均为 SceneCreator 内部组件；DSH 负责任务决策，Infra 负责已授权工具作业的资源准入和执行，不另建任务模型循环。
+SceneCreator 管理感知、背景重建、Blender、OpenUSD 和 Isaac 验证组件，旧构建继续支持 Artisan。DSH 负责任务决策，Infra 负责作业的资源准入和执行。
 
 单个场景完成语义与前景/背景隔离后，可在输入版本固定的前提下展开互不依赖的分支：
 
 ```text
 图片/视频 → 解码/采样 → SAM + VLM → 固定感知版本与前景/背景路由
-                                  ├─ 前景对象 A：证据 → 结构 → 几何 → Blender/Artisan → 验证
-                                  ├─ 前景对象 B：证据 → 结构 → 几何 → Blender/Artisan → 验证
+                                  ├─ 前景对象 A：证据 → 结构 → 几何 → Blender/OpenUSD → 验证
+                                  ├─ 前景对象 B：证据 → 结构 → 几何 → Blender/OpenUSD → 验证
                                   └─ 背景：观测准备 → COLMAP → 3DGS → 真实总览
                                           ↓
                               在依赖完成后汇合为场景与交付
@@ -35,7 +35,7 @@
 
 ## 镜像与执行后端
 
-为依赖冲突或负载较重的组件设计独立、可复现的 image/Docker 执行环境，优先考虑 3DGS、COLMAP、Blender、Artisan/仿真运行时。镜像并不自动提供合理 GPU 隔离；GPU 分配、显存控制与作业准入仍由宿主/集群调度执行。
+为依赖冲突或负载较重的组件设计独立的容器执行环境，优先考虑 3DGS、COLMAP、Blender 和 Isaac。OpenUSD 与旧 Artisan 兼容后端可各用自己的解释器。GPU 分配、显存控制与作业准入由宿主或集群调度。
 
 执行接口保持统一：明确的输入产物、配置、输出位置、事件、资源声明、取消、退出状态和检查点。容器内外沿用原 DSH call ID 与 SceneCreator run ID。记录镜像 digest、代码/依赖版本、驱动和 CUDA 条件，凭据运行时注入，不写入镜像或可下载产物。
 

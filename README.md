@@ -2,8 +2,7 @@
 
 从图片、离线视频或明确的零件规格构建 Isaac Sim 场景，为 RoboHelix 等下游系统提供带来源记录的交互资产和 USD 场景包。
 
-当前代码基于 2026-11-11 的 `43d3c72`，保留 Agent Harness、内部组件、Studio、资产物理验证和交付适配。
-当前工作区已移除开发测试、合成演示、单场景实验及其兼容入口。原代码可由该提交恢复。
+仓库提供 Agent Harness、Studio、装配蓝图、资产物理验证和 USD 交付。已移除的开发测试、合成演示和单场景实验可在 [清理前版本](https://github.com/FelixtheFelinae/SceneCreator/tree/43d3c72b3f7699e32eb297816828a5ed9874a232) 查阅。
 
 ## 图片与视频重建
 
@@ -76,7 +75,7 @@ scene-perception --help
 | `integration/` | 场景依赖包、DSH 配置与 ClawSpine 接口 |
 | `workbench/`、`integrations/studio/` | 服务、作业、原生插件与前端 |
 
-[流程与调用关系](docs/WORKFLOW_OVERVIEW.md) · [架构](docs/ARCHITECTURE.md) · [清理记录](docs/HARNESS_CLEANUP.md) · [文档索引](docs/README.md)
+[架构与当前缺口](docs/ARCHITECTURE.md) · [流程与调用关系](docs/WORKFLOW_OVERVIEW.md) · [机械资产标准草案](docs/MECHANICAL_ASSET_STANDARD.md) · [文档索引](docs/README.md)
 
 仿真资产、原始媒体、权重、密钥和运行结果保存在 Git 之外。资产物理检查覆盖报告所列行为，机器人任务成功由下游评测记录。
 

@@ -1,6 +1,6 @@
-# Artisan 后端拆分：第一轮实现
+# Artisan 兼容后端
 
-本轮把 SceneCreator 对 Artisan 的执行边界从模型调用适配器中移出，保留原有 SDK、生成代码和 DSH 会话。未修改外部 Artisan 源码，未新增任务模型循环，也未实现 Mechanical Assembly IR。
+Artisan 后端为旧构建和冻结 v9 资产提供 SDK 编译、导出与审核。普通资产配置 `usd_python` 后可走 Blender 与 OpenUSD。下图展示选择 Artisan 兼容分支后的调用。 [直接生成 Isaac USD](ISAAC_USD_WORKFLOW.md)
 
 ## 实际调用路径
 
@@ -9,8 +9,7 @@ flowchart TD
     DSH[DSH 原生会话] --> OP[components.operations]
     OP --> GA[装配几何审核 / 构建入口核对]
     GA --> GEO[harness.geometry.build_recipe]
-    OLD[现有 Coding / Review 适配器] --> API[construction.artisan_backend.run_artisan]
-    GEO --> API
+    GEO --> API[construction.artisan_backend.run_artisan]
     API --> W[独立 Artisan Python worker]
     W --> C[SDK compile_for_agent]
     W --> E[SDK export]
@@ -46,7 +45,7 @@ qa = run_artisan(python, bundle, mode="qa")
 | `qa` | `model.py`、`qa_tests.py` | 调用现有 SDK QA；有效测试发现缺陷时返回反馈，执行错误抛出异常 |
 | `union` | `inputs/*.obj` | 保留网格合并；这是显式修改输入的操作，不是只读审核；不要求导入 SDK runtime |
 
-这些细分操作目前通过 Python 后端和 worker CLI 使用；本轮未增加 DSH 工具或 GUI 按钮。原有 DSH 构建和 Review 流程通过兼容入口使用新协议。
+这些操作由 Python 后端和 worker CLI 提供。DSH 构建工具通过 `build_recipe` 选择兼容分支。
 
 每次后端调用创建 `.artisan-requests/<request_id>.json`、同 ID 的 `.result.json` 和 `.log`。顶层 `<operation>.json`、`<operation>.log` 保留最近一次结果，方便旧调用方读取。直接执行 worker 的旧二参数形式也保留请求和结果；其标准输出由直接调用方负责收集。
 
@@ -94,11 +93,6 @@ qa = run_artisan(python, bundle, mode="qa")
 
 输入绑定目前覆盖约定的工作目录文件，不是任意 Python 依赖发现器；未锁定整个 Artisan 安装树、第三方包版本或运行环境。导出文件哈希保证列入清单的文件未变化，不证明所有格式引用都有效、碰撞质量合格或仿真可执行。SDK 内部仍可能在导出时重新加载或编译模型，API 分开不等于 SDK 已彻底解耦。
 
-## 下一步：最小 Mechanical Assembly IR
+## 装配描述与历史记录
 
-2026-11-09 更新：已开始统一前端描述，P0 实际实现和限制见
-[ASSEMBLY_BLUEPRINT.md](ASSEMBLY_BLUEPRINT.md)，运行记录见
-[P0 报告](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/reports/ASSEMBLY_BLUEPRINT_P0_20261109.md)。下文保留本次后端拆分完成时的建议；
-目前新增的描述层仍未替代全部 GeometryRecipe / AssemblyPlan 或机械功能验证。
-
-下一任务应从确定的装配描述输入开始，新增最小 IR 和现有 Blueprint / GeometryRecipe / AssemblyPlan 的适配器，明确零件定义与实例、单位与局部坐标系、接口及 Mate 引用、证据与假设。先用轴孔或螺栓台架做离线往返与错误引用测试，再连接实际后端；避免先增加 Agent 或直接扩展端到端视频流程。
+当前资产的零件、接口和配合由 `AssemblyBlueprint` 统一描述。构建阶段继续使用 `GeometryRecipe`、装配审核和实际物理报告。 [装配蓝图](ASSEMBLY_BLUEPRINT.md) · [P0 历史记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/reports/ASSEMBLY_BLUEPRINT_P0_20261109.md)

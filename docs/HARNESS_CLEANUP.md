@@ -1,6 +1,6 @@
-# Agent Harness 本地清理记录
+# Agent Harness 清理记录
 
-2026-11-12。Mac 工作目录为 `/Users/felixthefelinae/Documents/ChatGPT/Agentic Robot Environments`，本地分支 `codex/harness-only`，基于远端 `codex/object-design-background` 的 `43d3c72b3f7699e32eb297816828a5ed9874a232`。清理保存在工作区，尚未提交或推送。
+2026-11-12。清理以 `43d3c72` 为基线，已随 `87243e7` 发布到 `main`。下面的检查结果属于当时的清理阶段。 [清理提交](https://github.com/FelixtheFelinae/SceneCreator/commit/87243e7e10e04460de74dc356d9c251370477245)
 
 ## 保留的调用链
 
@@ -8,7 +8,7 @@
 
 结构前检、Critic、约束修订、资产物理验证、证据与哈希记录保留。Studio、Blender/Artisan 接口、可选背景重建、标准连接、工具资产生成与验证、场景依赖打包均为 Harness 的运行依赖。
 
-已有 `generate` / `scene-harness` 保留多对象批处理与 `delivery.json` 输出。新 Workflow 默认单目标，物理与背景分支默认关闭，最终 export 尚未自动串入。详细调用关系见 [流程简图](WORKFLOW_OVERVIEW.md) 和 [架构](ARCHITECTURE.md)。
+已有 `generate` / `scene-harness` 保留多对象批处理与 `delivery.json` 输出。当前媒体 Workflow 默认单目标，物理与背景默认关闭。配置 `usd_python` 后自动组装场景并导出候选包。 [流程简图](WORKFLOW_OVERVIEW.md) · [架构](ARCHITECTURE.md)
 
 ## 删除与迁移
 

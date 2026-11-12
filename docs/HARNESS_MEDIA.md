@@ -1,6 +1,6 @@
 # Harness 的视频与多图片输入
 
-入口是 `scene-harness`，实现位于 `src/roboenv_perception/harness/cli.py` 和
+本文说明 `scenecreator generate` / `scene-harness` 的多对象入口，实现位于 `src/roboenv_perception/harness/cli.py` 和
 `src/roboenv_perception/harness/run.py`。请求必须给一段任务描述，并选择一个视频或一组图片。
 多图片模式的适配器是 `src/roboenv_perception/harness/media.py:run_images`；单图片直接调用
 现有 `pipeline.run_image`，视频调用 `video_pipeline.run_video`。
@@ -11,13 +11,13 @@
   --images /absolute/path/front.jpg /absolute/path/side.jpg \
   --perception-config /absolute/path/perception.toml \
   --construction-config /absolute/path/construction.toml \
-  --artisan-python /absolute/path/artisan-python \
+  --usd-python /absolute/path/openusd-python \
   --blender /absolute/path/blender \
   --isaac-python /absolute/path/isaac-python \
   --output /absolute/path/new-run
 ```
 
-`--video /absolute/path/clip.mp4` 与 `--images` 二选一。现有 VLM 负责逐张候选清单和实例语义，
+`--video /absolute/path/clip.mp4` 与 `--images` 二选一。普通资产可用 `--usd-python`，旧构建与冻结 v9 使用 `--artisan-python`。现有 VLM 负责逐张候选清单和实例语义，
 SAM3 或配置的 Grounding DINO + SAM2.1 负责可见 mask。多图片输入逐张运行同一单图感知流程，
 再把它们整理成下游 `prepare_objects` 可读取的 `scene.json`、帧记录、对象观察和证据图。
 这一层没有估计相机位姿、深度或实物运动。

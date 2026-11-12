@@ -1,6 +1,6 @@
 # SceneCreator Studio
 
-Studio 复用 ClawSpine 使用的 DSH 原生会话、模型请求、插件、历史和取消机制。SAM、内部 VLM、COLMAP、3DGS、Blender、Artisan 和验证实现均属于 SceneCreator。DSH 任务 Agent 通过 SceneCreator 插件调用这些组件，工作台不另建模型聊天循环。
+Studio 复用 ClawSpine 使用的 DSH 原生会话、模型请求、插件、历史和取消机制。DSH Agent 通过 SceneCreator 插件调用 Workflow。内部 VLM 与 SAM 提供感知和结构证据，Blender 生成分件，OpenUSD 写入候选资产。COLMAP／3DGS 背景和 Isaac 物理验证按需执行。
 
 ## 已实现的入口与调用关系
 
@@ -12,7 +12,7 @@ scenecreator studio
       原生 SceneCreator 工具、会话/调用 ID、取消、认证后的页面代理
   → workbench/server.py → jobs.py → worker.py
       上传、队列、子进程、组件来源绑定、不可变新版本
-  → components/operations.py
+  → harness/workflow.py → components/operations.py
       ├─ perception.py → pipeline.py / video_pipeline.py / harness/media.py
       ├─ construction/design.py / harness/geometry.py / assembly.py
       ├─ harness/run.py 的场景组装、物理验证与交付实现
@@ -25,7 +25,7 @@ scenecreator studio
       分割交互、结构、模型、场景、验证；详细记录按需展开
 ```
 
-`envcreator_generate` 保留完整旧 Harness。组件操作只执行明确的一步；DSH Agent 决定下一步和修订，组件 worker 不启动 Agent 循环。已有领域方法继续负责判定，执行完成不等于独立审核或物理通过。
+默认工具负责查询和推进 Workflow。DSH Agent 决定采样、目标与修订方向，程序调度组件和审核。`envcreator_generate` 保留完整旧 Harness，通过调试配置向 DSH 注册。工作流完成、外观审核和物理结果分别记录。
 
 ## 使用
 
@@ -41,6 +41,8 @@ cp configs/studio.example.toml configs/local-studio.toml
 ```
 
 配置相对路径按启动工作目录解析。启动器给出本机 DSH 认证链接，首次访问交换 Cookie。默认端口 8890。任务历史保存在 Studio state 目录，重启后继续使用。
+
+媒体重建需填写 `perception_config` 和 `construction_config`。配置 `blender` 与 `usd_python` 可生成直接 USD 场景包。使用 `envcreator_workflow_start` 的 `params.declared_design` 可提交已知规格的螺钉盖板或限位铰链，无需上传媒体。 [配置示例](../configs/studio.example.toml) · [已知规格输入](ISAAC_USD_WORKFLOW.md)
 
 在原生会话标题栏点击 **SceneCreator**，或在会话视图列表选择 **SceneCreator**。可拖动 DSH 原生分隔线或全屏查看。
 
@@ -68,7 +70,7 @@ cp configs/studio.example.toml configs/local-studio.toml
 
 ## 原生工具
 
-`envcreator_context` 返回当前会话任务、上传 ID、当前对象、兼容来源、能力和缺失环境；`envcreator_inspect` 查看实际错误与产物；`envcreator_generate` 保留完整 Harness。组件工具统一加 `envcreator_` 前缀：
+默认注册 `envcreator_context`、`envcreator_inspect`、`envcreator_workflow_start` 和 `envcreator_workflow_advance`。前两项查询输入、状态和产物，后两项启动与推进流程。`debug_component_tools = true` 时可调用 `envcreator_generate` 与下表组件。完整注册表见 [组件目录](../src/roboenv_perception/components/catalog.py)。
 
 | 组件操作 | 使用的领域方法与产物 |
 | --- | --- |
@@ -82,17 +84,16 @@ cp configs/studio.example.toml configs/local-studio.toml
 | scope / scope_apply | 独立范围规划，或记录用户明确选择；两种来源分别标记 |
 | research | 已有资料检索与来源适用性核对，不把搜索结果直接当实测 |
 | blueprint / blueprint_review | 结构提案与绑定文件哈希的独立审核 |
+| blueprint_repair / geometry_audit | 按约束修订接口或检查实际配方中的功能面与几何关系 |
 | geometry | 几何 recipe，可绑定旧 recipe 局部修订；标准组件签名保持冻结 |
 | assembly_audit | 连接编译与装配几何审查 |
-| build / render | Blender + Artisan 构建物理资产，或单独重渲染 |
+| build / render | Blender 构建网格，配置 `usd_python` 时由 OpenUSD 写物理资产；兼容 Artisan 旧构建或单独重渲染 |
 | geometry_review | 原图与实际渲染对比，记录视觉审核；不等同物理通过 |
 | assets_merge / scene | 合并不同对象的已记录资产，再组装场景 |
 | physics | 现有受支持验证协议；保留失败与未支持状态 |
 | background / cameras | 背景观测准备与 COLMAP，相机未注册完整时保留失败 |
 | gaussian / overview | 真实 CUDA 3DGS、检查点恢复、真实相机视角渲染 |
 | task_review / export | 任务范围核对与带实际验证状态的打包 |
-| reference_fit / reference_code | 对同一已注册电脑原视频复算历史人工观测拟合，以冻结蓝图生成新候选；不复制旧模型 |
-| reference_validate / reference_review | 参考流程的照片投影、实际 QA/物理/重载/反例复查与独立审核；明确条件与失败 |
 
 工具返回 `agent_observation`，包含受限的结构化对象、输出角色/运行 ID、审核意见和编译错误；这一路径供 DSH Agent 自修复，和人类页面的简短投影分开。修订可把具体问题放在 `params.feedback`，保留完整原目标在 `task`。
 
@@ -132,12 +133,12 @@ SSE 支持按事件字节偏移续读，浏览器另有低频刷新兜底。浏�
 
 活跃作业保存资源记录，当前页面曲线为最近约 10 分钟，尚无持久曲线回放、NVML、远程计算节点或动态 GPU 分配。部署设置只读，修改 TOML 后重启生效；并发默认 1。
 
-## 验证入口
+## 历史验证与规划
 
 [历史检查记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/ENVCREATOR_STUDIO.md)
 
-测试夹具覆盖接口、生命周期、真实掩码并集、视频修正后的轨迹引用、依赖篡改拒绝、过期验证、事件续读、取消持久化、原生身份与前端状态清理。夹具不作为真实 VLM、GPU 重建、物理功能或浏览器视觉验收。实际运行与逐阶段验收记录见 `reports/STUDIO_COMPONENT_ACCEPTANCE_20261109.md`。
+清理前的夹具覆盖接口、作业生命周期、掩码合并、依赖校验、取消和前端状态。相关结果适用于当时的代码和运行环境。 [Studio 逐阶段验收记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/reports/STUDIO_COMPONENT_ACCEPTANCE_20261109.md)
 
 多场景、前景/背景分支并行、容器与资源调度的长期要求见 [Infra 长期规划](SCENECREATOR_INFRA_ROADMAP.md)。该规划本轮只记录，不实施。
 
-人工监督参考流程的受限工具接入、证据复用条件与执行准则见 [参考流程辅助重建](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/REFERENCE_GUIDED_RECONSTRUCTION.md)。当前组件目录共 30 项；4 个 reference 操作只支持注册的同视频电脑场景，不表示通用组件已经具备自动角点标定、任意物体照片投影和通用独立重载能力。
+笔记本专项的 `reference_*` 工具已移出当前目录。其人工证据复用和单场景运行可在 [历史参考重建记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/REFERENCE_GUIDED_RECONSTRUCTION.md) 查阅。

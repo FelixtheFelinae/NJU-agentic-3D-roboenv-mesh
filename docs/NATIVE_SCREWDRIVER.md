@@ -2,6 +2,8 @@
 
 SceneCreator 提供工具资产和简化连接模型；ClawSpine 的原生 DSH 负责观测、生成 Low Reflex、执行 G1 动作及记录会话。没有新增外层模型控制循环。
 
+下文记录 2026-10-28 的历史 G1 接入和台架。当前工具入口是 `scenecreator tool` 与 `scenecreator tool-test`。声明式螺钉盖板采用独立步前钩子，需另行接入与验收。 [直接生成 Isaac USD](ISAAC_USD_WORKFLOW.md)
+
 ## 代码调用关系
 
 - `src/roboenv_perception/tools/native_screw_runtime.py`：在每个 PhysX 子步读取批头和螺丝的实际姿态、速度，施加受限电机驱动和连接力。
@@ -15,7 +17,7 @@ SceneCreator 提供工具资产和简化连接模型；ClawSpine 的原生 DSH �
 
 `read_power_tool` 返回实测转速、TCP 和轴向、几何啮合、累计旋转、退出量及连接状态。这些属于明确开放的仿真仪表读数，不能称作视觉识别结果。人工停止、任务恢复及服务退出均请求关闭电机。
 
-## 本次物理验证
+## 历史物理验证
 
 证据目录：`outputs/g1-screw-mechanics-20261028/`。
 
@@ -48,7 +50,7 @@ G1 右腕通过固定关节安装螺丝刀，保留负载传递，不是手指�
 
 ## 重新打开与本次会话
 
-本机入口仍为 `outputs/g1-wrist-screwdriver-20261028/desktop/start.sh astra`，已指向包含螺丝力学的新场景包；启动后打开认证页面。模型使用独立的 DSH 配置，不使用 SceneCreator 的 VLM 凭据。
+原实验的本机启动记录为 `outputs/g1-wrist-screwdriver-20261028/desktop/start.sh astra`，依赖当时生成的场景包与原生运行环境。DSH 模型使用独立配置。当前场景的启动方式见 [ClawSpine 接入](SCENECREATOR_CLAWSPINE.md)。
 
 修订后的原生会话为 `617763fc-af1b-4ee2-beda-bf28c7b7df93`，证据目录 `outputs/g1-wrist-screwdriver-20261028/native-ui-20261028-203618-724287/`。已提交“右腕固定螺丝刀对准、反转、拧松并取下，最后停止电机”的任务。实际模型为 `gpt-6-astra`，原生日志已记录工具状态读取成功，以及后续全身状态读取。机器人任务尚未宣称成功。
 

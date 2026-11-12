@@ -2,11 +2,11 @@
 
 2026-11-04：新增版本化标准连接候选、连接编译器及修复边界，详见 [STANDARD_INTERACTIONS.md](STANDARD_INTERACTIONS.md)。以下小车结果保持原历史标注；旧几何修复流程不代表标准组件可在构建时任意修改。
 
-当前新增的是紧固关系的候选推断、几何检查和修复反馈。它允许根据视频与机械常识补全隐藏螺母、垫圈或螺纹座，但输出保持为假设；几何通过不等于完成预紧、承载或拆卸验证。
+本页说明媒体 Harness 中紧固关系的候选推断、几何检查和修复反馈。隐藏螺纹座、螺母等可以按证据提出候选，输出保留为假设。已知尺寸的 M3/M4/M5 螺钉盖板走 [独立声明式路径](ISAAC_USD_WORKFLOW.md)。
 
 ## 代码调用关系
 
-`scene-harness` 沿用原有视频/多图片证据、对象设计、公开资料检索、Blender/Artisan 导出和物理验证。此次新增环节位于 `harness/run.py::_build_assets`：
+`scene-harness` 使用视频或多图片证据、对象设计、公开资料检索、Blender 建模与物理验证。普通资产可直接写 USD，冻结标准连接由兼容后端处理。装配分支位于 `harness/run.py::_build_assets`。
 
 1. 任务包含紧固、螺丝、拆装等要求时，`assembly.infer_connections` 复用既有 VLM 客户端，对证据图提出连接族候选。记录可见事实、至少两个备选、选择依据、假设和未知项。公开资料仍走原有 `research.py`，资料中的推测不会转成实测值。
 2. `geometry.infer_recipe` 接收上述候选与上一轮问题，生成几何和 `AssemblyPlan`。每个连接引用实际零件、螺钉头和杆部 solid，给出从头部到螺母的夹紧层次、反力保持方式和工具接近方向。
@@ -31,11 +31,11 @@
 
 记录保存在各对象的 `assembly_reasoning/` 和 `candidate-NNN/assembly/`，包含图像哈希、模型请求/回复、语义、实际检查几何和结果。记录的是证据、候选、决定及结果，便于复核与重放。
 
-## 小车实际运行：2026-10-27
+## 历史案例：2026-10-27 小车实验
 
 源资产为 `outputs/cart-full-20261027/assembly_spec_v4.json`。复查了顶视、10.0 s 正面和18.9 s 前梁近景，调用 Qwen3.7-plus 做专项复核。第一次返回 JSON schema 而非实例，解析失败；第二次获得三类候选。模型仍把部分梁方向和支架姿态描述错，候选未经直接照搬。原始提议、复核决定和失败记录保留在 `outputs/cart-fasteners-20261027/`。
 
-修复入口 `experiments/cart_full/repair_fasteners.py` 是本车的显式规则适配器，使用通用 Harness 检查器。它不是通用 VLM 自动生成尺寸算法。最终配方为 `candidate-008/assembly_spec.json`：
+当时的修复器按该车的明确规则调整配方，再调用通用 Harness 检查器。专项脚本已移出当前分支。最终配方为 `candidate-008/assembly_spec.json`，各连接如下。 [历史修复脚本](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/experiments/cart_full/repair_fasteners.py)
 
 - 四角梁连接：统一孔阵坐标，把螺丝放在对齐的内侧孔排，避开轮轴支座；补充头下垫圈、背面垫圈和螺母。
 - 两个前支架：纠正原本够不到支架的短杆及错误的纵梁连接声明，改为“支架—前横梁”的穿透连接，并形成实际安装孔。
@@ -49,7 +49,7 @@
 
 [历史检查记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/HARNESS_ASSEMBLY.md)
 
-整仓回归实际通过229项、跳过4项；24个导出垫圈/螺母的OBJ内外孔径检查通过。上面这组专项测试实际通过58项，覆盖旧式穿板、杆长不足、支架漂空、遗漏连接、虚构证据、错误螺母孔、工具障碍、异常轴向、修改后的哈希，以及 Harness 在导出前拒绝错误装配并传递反馈。修改后的控制流程尚未跑过一次从新视频开始的完整真实模型任务。
+当时的整仓回归通过 229 项、跳过 4 项，24 个导出垫圈和螺母的 OBJ 内外孔径检查通过。专项测试通过 58 项，覆盖穿板、杆长不足、支架漂空、遗漏连接、证据、螺母孔、工具障碍、轴向、哈希与失败反馈。该次修改后尚未重跑从新视频开始的完整模型任务。
 
 ## 当前限制与下一步
 

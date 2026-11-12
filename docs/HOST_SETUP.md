@@ -22,7 +22,7 @@ Studio 的原生 Agent 会话还需配置外部 ClawSpine checkout 和独立 DSH
 - 感知使用 Python 3.12，依赖见 `requirements/cuda-dev.txt` 与 `requirements/cuda-dev.lock.txt`。后者基于原 Linux 主机的版本快照，已剔除开发测试依赖。
 - 官方 SAM 3 源码版本为 `7f473cfd983d5eb43040ff608f66bff0d7bdcb53`，权重由使用者放在推理机器上并配置 `sam.checkpoint`。
 - CUDA 安装脚本为 `scripts/bootstrap_cuda.sh`，仅在准备好的 Linux 环境运行，并传入官方 SAM 3 源码目录。已有环境先检查配置，不重复创建。
-- Blender 与 Artisan 的路径见构建配置；Isaac 使用独立解释器或既有容器，不使用感知环境替代。
+- 直接 USD 路径配置 `blender` 和 `usd_python`，多对象 CLI 对应 `--blender` 和 `--usd-python`。旧构建与冻结 v9 使用 `artisan_python`。Isaac 使用独立解释器或既有容器。 [直接生成 Isaac USD](ISAAC_USD_WORKFLOW.md)
 - 可选背景环境由 `scripts/bootstrap_construction.sh` 准备。脚本中的 Ubuntu、CUDA 与 GPU 架构默认值来自原执行主机，需要在目标 Linux 上核对。
 - OpenUSD 场景打包通过 `scenecreator handoff --usd-python /absolute/path/to/python` 指定安装了 `usd-core` 的解释器。
 

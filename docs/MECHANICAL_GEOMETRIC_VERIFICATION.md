@@ -26,7 +26,7 @@
 }
 ```
 
-支持 `cylinder_outer`、`cylinder_inner`、`box_x/y/z_min/max`。
+支持 `cylinder_outer`、`cylinder_inner`、`box_x/y/z_min/max`、`box_edge`、`cylinder_axis` 与 `joint_axis`。`joint_axis` 绑定关节轴，`box_edge` 通过 `edge_axis` 和 `edge_sides` 选择盒体边。
 内孔必须来自实际 annulus；普通 cylinder、带底 hollow_cylinder 或文字声称的孔不能代替贯通孔。
 绑定必须属于接口对应零件，接口/solid 引用与绑定唯一性接受既有配方校验。
 暂不支持任意 Mesh 的面拟合、CAD 面标识、螺纹、齿面或候选 hinge_region 的接触验证。
@@ -79,20 +79,21 @@ DSH 工具流程：
    修订 blueprint 时同样提供 previous 和报告来源，核对旧蓝图哈希。
 4. 新候选重新检查；build 自行重算。已有紧固件 assembly_audit 继续保留，不被新检查器替代。
 
-组件目录、原生工具说明和生成的插件目录已更新。本轮验证使用独立 Studio 状态目录，没有重启当前用户会话；
-已运行的旧插件实例需正常重载后才能发现新增工具。
+固定 Workflow 在构建前调用 `geometry_audit` 并汇总 Critic 反馈。Studio 可通过 `debug_component_tools` 显式调用独立组件。 [Studio 工具入口](SCENECREATOR_STUDIO.md)
 
 ## 独立复现
 
+将输入换成同一候选输出的蓝图和配方。
+
 ```bash
 .venv/bin/python -m roboenv_perception.harness.geometric_verifier \
-  --blueprint tests/fixtures/mechanical_geometry/blueprint.json \
-  --recipe tests/fixtures/mechanical_geometry/recipe.json \
-  --output /tmp/mechanical-fit-check
+  --blueprint /absolute/path/candidate/blueprint.json \
+  --recipe /absolute/path/candidate/recipe.json \
+  --output /absolute/path/new-mechanical-fit-check
 ```
 
 输出目录必须是新目录。退出码 0 仅表示检查 passed，其余为 2。
-该夹具的所有尺寸明确来自人工测试设计，未假装来自视频或真实物体测量。
+清理前的人工轴孔夹具保存在 [历史夹具目录](https://github.com/FelixtheFelinae/SceneCreator/tree/43d3c72b3f7699e32eb297816828a5ed9874a232/tests/fixtures/mechanical_geometry)。
 
 ## 验证边界
 

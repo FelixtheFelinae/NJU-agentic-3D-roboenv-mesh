@@ -1,7 +1,7 @@
 # 固定重建工作流与决策边界
 
-2026-11-11，P0-3 更新。在既有组件之上增加单目标工作流；旧 scenecreator generate 与组件调试入口保留。
-没有新增模型聊天循环。DSH 的任务模型与 SceneCreator 内部 VLM 分开配置。
+当前 Workflow 提供单目标媒体重建和已知规格生成。`scenecreator generate` 保留多对象入口。
+DSH 原生会话负责决策，任务模型与 SceneCreator 内部 VLM 分开配置。P0-2 至 P0-5 的实现与历史实验记录见文末。
 
 ## 实际调用路径
 
@@ -20,14 +20,14 @@ Agent 只选择采样、目标身份、结构假设或证据回访，不逐个�
 这里没有相机覆盖率估计。VLM 识别/解释对象，SAM 跟踪可见遮罩，证据组件选择建模视图。
 跨轮跟踪 ID 会改变；Agent 必须明确选择本轮对象，并记录与原对象对应的理由，不按类别自动合并。
 
-构建复用 Blender 的 Mesh 生成与 Artisan 的编译和导出，不增加 CAD 后端。
-在几何作者前检查装配描述能否被旧后端表达；未知尺度、参考约定或行程不会静默变成默认值。
+在几何作者前，先执行结构前检和已注册的两端配合规则，再检查当前后端能否表达连接图。
+未知尺度、参考约定与行程须保留为未知，或通过独立构建假设明确补充。Blender 从审核通过的配方生成网格。
+配置 `usd_python` 后，普通资产由 OpenUSD 写入刚体、碰撞体和关节。旧构建与冻结 v9 连接仍可使用 Artisan。
 
-background=off 是新入口默认值；masks 仅整理背景；reconstruct 顺序执行
-COLMAP 相机 → 3DGS → 一张实际相机视图。该图不是全景图，未补全未观察区域。
-physics=false 是默认值；显式开启后沿用现有场景组装和 Isaac 协议。
-本轮未增加物理协议或机器人动作。
-新路径尚未输出旧全流程的 delivery bundle / 最终任务覆盖审核；完成状态表示所选步骤完成。
+`background=off` 为默认值。`masks` 整理背景观测，`reconstruct` 顺序执行 COLMAP 相机、3DGS 与标定视角渲染，背景当前单独输出。
+`physics=false` 为默认值，开启后使用已有 Isaac 资产协议。配置 `usd_python` 时，媒体 Workflow 组装场景并自动运行 `export`，交付包记录 `unverified` 和可用的验证报告。`completed` 表示所选步骤完成。
+
+已知规格入口 `workflow start --design` 接受螺钉盖板和限位铰链。它使用声明的蓝图、配合规则和固定配方，输出待验收的场景包。 [直接生成 Isaac USD](ISAAC_USD_WORKFLOW.md)
 
 ## Critic 与修复
 
@@ -174,7 +174,7 @@ Workflow 的结构作者因此最多按真实 Schema 错误纠正一次；保留
 或缺失证据无限重试；Intake 与原图不因此自动改写。非 Workflow 调用不增加重试。
 
 该检查只判断接口声明能否被当前实现消费；通过后仍需 recipe.interface_bindings、
-实际 primitive 几何检查、Blender/Artisan 构建、外观及可选物理审核。
+实际基元几何检查、Blender 构建、USD 导出、外观及可选物理审核。
 它不提供通用 CAD、闭环机构求解、自动隐藏接口恢复或新的接触协议。
 
 具体代码边界、笔记本/自行车实测、失败与回归结果见

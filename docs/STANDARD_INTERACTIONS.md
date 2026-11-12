@@ -1,6 +1,6 @@
 # 标准连接候选套件与连接编译
 
-2026-11-04 实现。当前为 `standard-interaction-kit-v1-candidate.1`，不是物理验收全部通过的版本。原 v9 与 11 月 3 日装配测试的失败继续有效。此处提取、编译和比较已有实现，没有新增模型推理循环，也没有发起模型请求。
+本页描述冻结候选 `standard-interaction-kit-v1-candidate.1` 的编译、安装与台架协议。原 v9 和 11 月 3 日装配结果仍按原资产与条件解读。M3/M4/M5 声明式盖板使用另一套配合规则和 Isaac 钩子，见 [直接生成 Isaac USD](ISAAC_USD_WORKFLOW.md)。
 
 ## 代码与调用关系
 
@@ -42,7 +42,7 @@ standard_interactions/validation.py::run_validation
 
 旧 `assembly-hypotheses/1` 保留读取和几何诊断能力，不能据此声称注册了新标准或通过拆卸物理验证。通孔螺母等未注册族不自动套用 M4 模型。
 
-**通用 Harness 目前接入到配置编译与修复限制。** Blender/Artisan 的通用资产导出尚未自动安装这些螺纹约束，也没有自动绑定标准工具；实际 USD 约束写入由 `standard_interactions/usd.py` 提供，专用三角盒构建入口已删除。因此 `_verify` 对带装配语义的资产返回 `unsupported` / `not_run`，不会用普通刚体推拉或铰链测试冒充连接验证。通用资产的标准螺钉外形目前仍是受约束的配方包络；完整槽口网格复用还需导出适配。
+有注册标准引用的构建走 Artisan 兼容路径。`harness/geometry.py` 调用 `standard_interactions.bundle` 安装冻结标准组件，由 `standard_interactions/usd.py` 写入连接。`_verify` 在显式启用装配验证且存在标准包时调用独立台架，并保留组合场景 `not_run`。其余装配候选返回 `unsupported` 或 `not_run`。标准件与工具资产由调用方提供，台架结果只覆盖协议中的条件。
 
 `repair_policy.route_physics_failures` 只允许明确标注为 `object_geometry` 或 `instance_binding` 且带报告的失败回到对象修复。`standard_primitive`、`test_harness`、数值诊断和未归因失败保留缺陷。混合失败中含任一不可修复项，也停止自动重建。路由写在任务根目录的 `repair-routing-NN.json`，不修改已封存的物理阶段。现有通用物理报告尚未自动细分失败原因，默认停止，不按错误文本猜测归属。
 

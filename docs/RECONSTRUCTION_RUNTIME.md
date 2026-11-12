@@ -1,7 +1,6 @@
-# 本机重建运行环境与复现
+# COLMAP 与 3DGS 背景重建
 
-2026-10-22 在远程 Ubuntu 完成用户目录安装；未使用 sudo，未升级系统包，
-未下载模型权重，也未修改其他项目的 Conda 环境。
+Workflow 可通过 `--background reconstruct` 运行背景遮罩、COLMAP 位姿与 3DGS 训练。标定相机视角和背景结果单独输出，前景 USD 与背景的米制对齐仍待接入。以下环境记录来自 2026-10-22 的远程 Ubuntu 用户目录安装。
 
 ## 已配置路径
 
@@ -45,14 +44,11 @@ bash scripts/bootstrap_construction.sh
 默认路径可通过 `ROBOENV_RUNTIME_ROOT` 修改，CUDA/架构可通过
 `CUDA_HOME`、`TORCH_CUDA_ARCH_LIST`、`MAX_JOBS` 调整。默认架构 8.9 专用于本机显卡。
 
-## 合成三维集成测试
-
-`scripts/smoke_reconstruction.py` 用解析射线交点生成一致的三维视差、纹理地面/墙面、
-一个静态背景台座和一个独立前景立方体；导出原图、mask、已知相机真值。
-COLMAP 不读取相机真值。它不是用户视频、SAM 预测或正式质量验收。
+## 用已有感知产物运行背景阶段
 
 ```bash
-.venv/bin/python scripts/smoke_reconstruction.py --output outputs/room-NEW/background
+.venv/bin/scene-perception prepare-background --bundle /absolute/path/perception \
+  --config configs/local-construction.toml --output outputs/room-NEW/background
 .venv/bin/scene-perception estimate-cameras --background outputs/room-NEW/background \
   --config configs/local-construction.toml --output outputs/room-NEW/cameras
 # 短程验证可使用配置副本将 iterations 设为 200；当前模板为 10000。
@@ -60,7 +56,9 @@ COLMAP 不读取相机真值。它不是用户视频、SAM 预测或正式质量
   --config configs/local-construction.toml --output outputs/room-NEW/gaussians
 ```
 
-实际运行目录为 `outputs/reconstruction-integration-20261022/`：
+## 历史合成场景记录
+
+2026-10-22 的集成测试用解析射线交点生成背景、前景、遮罩和相机真值。COLMAP 仅使用生成图像及遮罩。实际运行目录为 `outputs/reconstruction-integration-20261022/`。合成脚本已移出当前分支。 [清理前的合成脚本](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/scripts/smoke_reconstruction.py)
 
 以下是历史固定点数训练器的记录。当前默认自适应训练已加入增密/剪枝与不跨掩码边界的
 SSIM；需要重现历史行为时显式设置 `training_mode="fixed"`。默认保留中间检查点，
@@ -83,22 +81,19 @@ SSIM；需要重现历史行为时显式设置 `training_mode="fixed"`。默认�
 补全仍是弱监督假设，前景原始 RGB 没有被当成背景真值，未知/排除区域不监督。
 3DGS 没有物理碰撞几何、真实尺度或 RoboHelix 接入。
 
-## API 与剩余输入
+## API 配置与历史请求
 
-两份本地配置已填写北京 endpoint、`qwen3.7-plus`、非思考模式及 JSON 输出。
-密钥放项目根目录 `.env.local`，格式为 `VLM_API_KEY=...`，权限 600，Git 忽略。
-只有显式指定参数才加载，不执行 shell，不进行变量插值，不打印值；已有进程环境变量优先。
+原 Linux 主机的两份配置使用北京 endpoint、`qwen3.7-plus`、非思考模式及 JSON 输出。
+密钥可保存在项目根目录的 `.env.local`，格式为 `VLM_API_KEY=...`。文件由 Git 忽略，使用 `--env-file` 显式加载。已有进程环境变量优先。
 
 ```bash
 .venv/bin/scene-perception --env-file .env.local construction-doctor \
   --config configs/local-construction.toml --perception-config configs/local.toml
 ```
 
-真实 API 小规模图像请求已成功，证明当前 Key 能调用所配置模型。
-合成证据上的真实 Design API 也已运行：旧 intake 曾把 `asset_id` 错当 `object_id`，
+原主机完成小规模图像请求和使用合成证据的 Design API 请求。旧 intake 曾把 `asset_id` 错当 `object_id`，
 程序拒绝该输出；现已明确提示原始 ID 并加入有界纠错，保留全部拒绝轨迹。
 对只有二维矩形的“cup”夹具，自检拒绝无依据的空心圆柱蓝图；不能把 replay 测试的
 PASS 当作真实模型质量结论，也不会为了跑通而放宽自检。
 
-SAM3 的只读访问检查仍返回 `403/GatedRepoError`，未下载 checkpoint。
-剩余真实运行输入为获授权的 `sam3.pt` 本地路径，以及用户桌面视频/图片的服务器路径。
+当时 SAM3 仓库访问检查返回 `403/GatedRepoError`。运行时需提供已经获准下载的本地 `sam3.pt` 和可访问的媒体路径。 [SAM3 权重迁移](SAM3_TRANSFER.md)

@@ -30,10 +30,10 @@ Windows 若只有 `py` 命令，将上述 `python` 改成 `py`；macOS/Linux 若
 
 ## 迁移
 
-本机项目中的目标目录已准备为：
+在推理机器的 SceneCreator checkout 下建立 `checkpoints/sam3/`。下面以 `/home/user/SceneCreator` 为例，替换为实际路径。
 
 ```text
-/home/felixz/NJU-agentic-3D-roboenv-mesh/checkpoints/sam3/
+/home/user/SceneCreator/checkpoints/sam3/
 ```
 
 通过 U 盘、SFTP 或现有文件传输工具，只复制 `sam3.pt` 到该目录。
@@ -41,11 +41,10 @@ Windows 若只有 `py` 命令，将上述 `python` 改成 `py`；macOS/Linux 若
 两机 SSH 可达时，也可在下载电脑执行：
 
 ```bash
-scp ./sam3-weights/sam3.pt felixz@本机IP:/home/felixz/NJU-agentic-3D-roboenv-mesh/checkpoints/sam3/sam3.pt
+scp ./sam3-weights/sam3.pt user@推理机地址:/home/user/SceneCreator/checkpoints/sam3/sam3.pt
 ```
 
-`本机IP` 替换为这台 Linux 机器可访问的地址。在本机运行 `hostname -I` 查看地址；
-SSH 还要求本机 SSH 服务可用、两台电脑之间网络可达。
+将用户名、`推理机地址` 和 checkout 路径替换为实际值。在推理机运行 `hostname -I` 可查看地址。SSH 需要两台电脑互通。
 
 ## 校验
 
@@ -70,7 +69,7 @@ sha256sum ./sam3-weights/sam3.pt
 本机：
 
 ```bash
-sha256sum /home/felixz/NJU-agentic-3D-roboenv-mesh/checkpoints/sam3/sam3.pt
+sha256sum /home/user/SceneCreator/checkpoints/sam3/sam3.pt
 ```
 
 两边哈希应完全一致。迁移完成后，修改已有 `configs/local.toml` 的 `[sam]` 段：
@@ -85,9 +84,8 @@ checkpoint = "../checkpoints/sam3/sam3.pt"
 检查运行环境：
 
 ```bash
-cd /home/felixz/NJU-agentic-3D-roboenv-mesh
+cd /home/user/SceneCreator
 .venv/bin/scene-perception doctor --require-cuda
 ```
 
-`doctor` 是就绪检查；真正的权重加载还需运行单帧推理。迁移权重本身不会自动切换正在使用
-Grounding DINO + SAM2 的视频配置，也不会改变本轮已经构建的三个物理资产。
+`doctor` 检查环境是否就绪，实际加载以单帧推理结果为准。若原配置使用 Grounding DINO + SAM2，另行修改所用配置的后端与权重路径。

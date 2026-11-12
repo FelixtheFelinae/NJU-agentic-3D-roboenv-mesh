@@ -1,9 +1,6 @@
-# 统一装配描述：P0
+# 装配蓝图与机械接口
 
-新版结构描述使用 `envcreator.assembly-blueprint/1`，实现位于
-`src/roboenv_perception/construction/assembly_blueprint.py`。它替代新生成任务中的旧
-SceneCreator Blueprint 作者输出，不删除历史文件，也不修改外部 Artisan 源码。
-这是 Mechanical Assembly IR 的最小描述层，尚不是完整的 CAD/物理编译 IR。
+`envcreator.assembly-blueprint/1` 是当前装配描述格式。媒体重建和已知规格生成共用零件、接口、配合、状态及来源字段。后端支持范围由结构前检和配合规则检查决定。 [AssemblyBlueprint 源码](../src/roboenv_perception/construction/assembly_blueprint.py)
 
 ## 实际入口与流程
 
@@ -16,8 +13,9 @@ flowchart LR
     B --> C[确定性引用和来源检查]
     C --> S[VLM 作者自检查]
     S --> R[blueprint.json + selfcheck.json]
-    R --> G[既有几何配方 / 显式后端兼容检查]
-    G --> A[Blender 建模 / Artisan 编译导出]
+    R --> P[结构前检与两端配合检查]
+    P --> G[GeometryRecipe 与几何审核]
+    G --> A[Blender 建模与 USD 导出]
 ```
 
 `blueprint` 操作继续由 DSH 插件调用；请求仍使用已绑定的 `evidence`、`scope` 版本和
@@ -39,12 +37,14 @@ flowchart LR
 
 ## 数据边界
 
-| 字段 | P0 含义 |
+| 字段 | 含义 |
 | --- | --- |
 | `asset_brief` | 接受的 Intake，必须原样保留 |
 | `part_definitions` / `part_instances` | 零件定义与实例；同类实例可以复用定义 |
+| `part_definitions[].spec_ref` | 可选的版本化零件规格，例如 M4 螺钉 |
 | `interfaces` | 所属零件、候选功能面、局部框架、方向及带单位参数 |
 | `mates` | 两接口之间的机械关系图，独立于实例组织层级 |
+| `mates[].rule_ref` | 可选的版本化配合规则，已注册规则由 `compile_mates` 解析和检查 |
 | `joints` | 运动学关节，通过 `mate_id` 指向相应配合；关节不证明接触功能 |
 | `geometric_constraints` | 正交、平面、同轴等待实现的要求；不是已求解结果 |
 | `states` | 参考/观测/候选状态、关节位置、零件位姿和活动配合 |
@@ -79,12 +79,14 @@ VLM 自检查必须回显当前文件哈希，不能拿旧版本评语通过新�
 
 ## 旧格式兼容与迁移
 
+用已有旧版蓝图与配套 Intake 替换下例路径。
+
 ```bash
 .venv/bin/python -m roboenv_perception.construction.assembly_blueprint \
-  --input tests/fixtures/assembly_blueprint/laptop-legacy.json \
+  --input /absolute/path/legacy-blueprint.json \
   --source-format envcreator \
-  --intake tests/fixtures/assembly_blueprint/laptop-intake.json \
-  --output /tmp/laptop-assembly-migration
+  --intake /absolute/path/asset-brief.json \
+  --output /absolute/path/new-migration
 ```
 
 输出目录必须不存在，防止覆盖历史。
@@ -93,16 +95,10 @@ Artisan 原始数字 Blueprint 使用 `--source-format artisan --object-id <id> 
 原始 tasks / dynamics_intent / metadata 保存在迁移原文中。
 这些旧动力学意图尚未转换成可执行物理参数；非空 Artisan couplings 当前明确拒绝导入，避免静默丢失符号语义。
 
-`legacy_projection` 是旧几何后端的显式有限视图，不是另一份可由 Agent 独立修改的蓝图。
-它拒绝相对坐标、无法转成关节的 Mate、未知有界关节参考约定，以及不满足旧关节树的结构。
-`harness/geometry.py` 的实际建模入口还拒绝未知 travel，避免旧默认角度用于新版描述。
-原始完整描述继续随构建候选保存；旧后端尚不会自动实现接口几何及几何约束。
+`legacy_projection` 给出当前媒体构建支持的有限视图，直接 USD 与旧导出分支都受该前检约束。
+相对坐标、无法转成关节的 Mate、未知的有界关节参考约定或行程，以及超出关节树支持范围的结构会阻塞构建。完整蓝图随候选保存。
+已知规格螺钉盖板由专用路径构建，可使用等效螺纹规则。 [直接生成 Isaac USD](ISAAC_USD_WORKFLOW.md)
 
-## 后续最小任务
+## 构建审核与扩展
 
-2026-11-09 后续实现：最小解析几何检查及原生工具/修订入口已接通，见
-[MECHANICAL_GEOMETRIC_VERIFICATION.md](MECHANICAL_GEOMETRIC_VERIFICATION.md)。
-当前仅验证配方基元，仍未验证导出 Mesh 或物理功能。
-
-先选一个明确的轴孔 Ground Truth 描述，增加只读几何检查器和结构化失败反馈：
-验证同轴误差与间隙，故意注入错轴和过盈作为对照。不要把 P0 中的正交/同轴文字要求当作几何验收。
+解析几何检查已经覆盖配方中的功能面、轴线与部分装配关系，导出网格与物理行为另行验收。待复审的资产规格会沿用现有接口和规则引用。 [机械几何审核](MECHANICAL_GEOMETRIC_VERIFICATION.md) · [七类结构草案](MECHANICAL_ASSET_STANDARD.md)

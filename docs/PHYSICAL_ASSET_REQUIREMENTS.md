@@ -4,9 +4,9 @@
 
 ## 生成入口与证据
 
-`harness/run.py` 组织感知、范围、资料、蓝图、几何、验证与交付。`construction/design.py` 记录零件及连接假设；`harness/geometry.py` 和受信任 Blender worker 生成几何，Artisan 导出通用刚体资产。特定工具通过注册实现构建与验证，目前公开工具入口为 `scenecreator tool` / `scenecreator tool-test`。
+`harness/workflow.py` 调度单目标构建，`harness/run.py` 保留多对象入口。装配蓝图记录零件、接口、连接和来源，Blender 生成网格，配置 `usd_python` 时由 OpenUSD 写入普通物理资产。Artisan 服务旧构建和冻结 v9。工具入口为 `scenecreator tool` 和 `scenecreator tool-test`。
 
-明确文本设计可直接使用带来源标注的参数化生成器，不必伪造图像感知或 VLM 调用。三角盒试验的 `tools/triangular_box.py` 复用 SceneCreator 的 Blender backend，直接装配 USD；该实验入口尚未注册到通用 CLI，也没有经过 Artisan 导出。
+已知尺寸可用 `scenecreator workflow start --design` 提交螺钉盖板或限位铰链。参数化蓝图以显式设计为来源，当前交付为 `unverified`，螺纹步前钩子由 Isaac 接收端挂载。 [直接生成 Isaac USD](ISAAC_USD_WORKFLOW.md)
 
 每个交付版本保存原始要求、来源、假设与未知项、参数及单位、代码/资产哈希、模拟器版本、验证协议、前后状态和失败修订。工程推测不标成实测，引用的拧紧力矩不标成松脱力矩。运行中的已识别版本不更改；修改后另建版本。
 
@@ -29,9 +29,9 @@
 
 固定支架、腕部固连、磁吸、理想导向和数学螺纹都可用于早期实验，但必须出现在交付假设中。未实现真实夹紧预载、真实螺牙、真实抓持时不能宣称已验证这些能力。
 
-## 当前三角盒试验
+## 历史案例：2026-10-30 三角盒试验
 
-要求为边长约 30 cm 的等边三角盒、独立顶盖与三角部螺丝；高 8 cm、壁/盖厚 4 mm、质量与摩擦为设计假设。使用 M4×0.7、8 mm 有效啮合长度、3 N·m 工具的独立参数版本。
+该历史案例采用边长约 30 cm、高 8 cm、壁和盖厚 4 mm 的等边三角盒，以及独立顶盖和三颗螺丝。质量与摩擦为设计假设。记录参数为 M4×0.7、8 mm 有效啮合及 3 N·m 工具。相关结果绑定当时的资产和协议。 [历史实验与验收记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/PHYSICAL_ASSET_REQUIREMENTS.md)
 
 截至 2026-10-30 的开发记录：
 - 参数化几何、开孔、角部螺纹座与 USD 装配已生成；顶盖、盒体和三颗螺丝是独立动态刚体。
@@ -63,7 +63,7 @@
 
 ## v9 盒子修订的适用范围
 
-详见 `reports/2026-10-30-box-v9/README.md`。新增原生 mimic 导程、独立可释放螺丝、原生有界静摩擦和等效夹紧预载；未采用失败的采样 D6 螺旋交叉驱动。资产验收记录为 `outputs/triangular-box-20261030-v9/validation/acceptance.json`，不能沿用早期分支结果代替最终运行时。
+冻结 v9 使用原生 mimic 导程、独立可释放螺丝、有界静摩擦和等效夹紧预载。原工作目录中的资产验收记录为 `outputs/triangular-box-20261030-v9/validation/acceptance.json`。这些结果绑定原资产版本，当前声明式螺钉盖板需要单独验收。 [冻结台架与协议](STANDARD_INTERACTIONS.md)
 
 - 夹紧预载等效作用于盖/盒，内部螺栓应力未解析；不得将本模型宣称为弹性有限元或材料强度验证。
 - 数值辅助刚体的质量及惯量须单独列出，不能计作识别出的机械零件。

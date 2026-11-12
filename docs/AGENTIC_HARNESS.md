@@ -1,33 +1,30 @@
-# 从视频或图片构建交互场景：当前 Harness
+# 从视频或图片批量构建交互场景
 
-紧固件候选推断、装配几何检查与本轮小车修复见 [装配关系推断与几何复审](HARNESS_ASSEMBLY.md)。
+本页说明多对象 `scenecreator generate`。Studio 与 CLI 的单目标重建和已知规格入口见 [固定 Workflow](FIXED_RECONSTRUCTION_WORKFLOW.md)。紧固件候选推断和小车历史案例见 [装配关系推断与几何复审](HARNESS_ASSEMBLY.md)。
 
 用于机器人操作的资产还需遵守 [物理资产要求](PHYSICAL_ASSET_REQUIREMENTS.md)：接触承压、双向反力、连接解除与功能对照均需证据；文档要求不等于已实现的自动验证。
 
 框架名为 **SceneCreator**。`scenecreator generate` 复用本文的生成入口；场景交付与
 ClawSpine 原生机器人运行的连接见 [SceneCreator × ClawSpine](SCENECREATOR_CLAWSPINE.md)。
 
-记录日期：2026-10-27。入口是 `src/roboenv_perception/harness/cli.py` 的 `scene-harness`
-（或 `python -m roboenv_perception.harness.cli`）。给一段明确物体与交互的任务描述，
+CLI 入口为 `scenecreator generate` 或 `scene-harness`，共用 `src/roboenv_perception/harness/cli.py`。给一段明确物体与交互的任务描述，
 再给一个视频或一组图片；输出目录必须是新路径。`run.py:run_harness` 按阶段保存状态，
 相同输入可从完成的阶段恢复；输入、配置、回放响应、控制器或 worker 代码指纹发生变化，
 以及已完成阶段的任一已索引产物缺失或变化时，拒绝沿用旧结果。
 
 ```bash
-.venv/bin/python -m roboenv_perception.harness.cli \
+.venv/bin/scenecreator generate \
   --task '重建桌上的杯子和带铰链盒子，验证推碰与开合' \
   --video /absolute/path/clip.mp4 \
   --perception-config /absolute/path/perception.toml \
   --construction-config /absolute/path/construction.toml \
-  --artisan-python /absolute/path/artisan-python \
+  --usd-python /absolute/path/openusd-python \
   --blender /absolute/path/blender \
   --isaac-python /absolute/path/isaac-python \
   --output /absolute/path/new-run
 ```
 
-多图片时将 `--video` 换成 `--images image1.jpg image2.jpg ...`。VLM/SAM、Artisan、
-Blender 和 Isaac 各自使用配置指定的本机环境；公开网页搜索可用 `--no-web-search` 关闭，
-物理测试可用 `--no-physics` 关闭。关闭物理测试的交付结果不会成为物理通过。
+多图片时将 `--video` 换成 `--images image1.jpg image2.jpg ...`。`--usd-python` 指定能导入 `pxr` 的解释器。旧构建和冻结 v9 需要 `--artisan-python`。`--no-web-search` 与 `--no-physics` 分别关闭网页搜索和 Isaac 物理阶段。
 
 ## 代码调用链与产物
 
@@ -55,13 +52,11 @@ Blender 和 Isaac 各自使用配置指定的本机环境；公开网页搜索�
    2–32 个严格递增的局部 `(z_m, radius_m)` 剖面点及固定 3–64 边环，构造共顶点
    连续侧面和顶底封口，适用于封闭容器外轮廓、灯座、轴等；它不表示真实内腔或
    壁厚，开放容器仍用 hollow 几何。所有尺寸仍需记录观察、估计或假设来源。
-   该实现扩展通用形状接口，不硬编码瓶子模板。`_model_source` 把蓝图
-   变成 Artisan 模型并导出 USD、URDF、MJCF。独立 VLM 将预览与原始证据对照；
+   配置 `--usd-python` 时，普通资产由 `direct_usd.py` 调度 OpenUSD 写入 USD。
+   旧兼容分支由 `_model_source` 生成 Artisan 模型，再编译导出。独立 VLM 将预览与原始证据对照。
    `REDO` 将具体问题送回下一次候选。几何修订有次数和总时间上限，保留每次 recipe、
    模型、编译结果与审查记录。预览按关节树累加 child origin，避免部件局部坐标被当作
-   装配坐标；供碰撞编译使用的 OBJ 只保留位置索引面，避免法线/UV 分裂把封闭壳变成
-   开放网格。`harness/usd_adapter.py` 将嵌套刚体层级展开为同级，保持静止装配姿态，并重映射
-   关节及 mimic 的目标关系，适配后重载检查引用。
+   装配坐标。Artisan 兼容路径的 `harness/usd_adapter.py` 将嵌套刚体层级展开为同级，保持参考装配姿态，并重映射关节及 mimic 的目标关系。直接 USD 路径按零件创建刚体。
    `construction/blender_worker.py` 另输出水平正交 `front.png`，与斜上、顶视、底视图
    一同提供；真实 smoke `outputs/harness-review-views-20261027/` 已成功生成四视图。
    `geometry.py` 的作者与复核输入均带 1-based `image_manifest`，明确原始证据/候选

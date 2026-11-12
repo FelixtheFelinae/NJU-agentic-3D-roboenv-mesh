@@ -115,12 +115,9 @@ worker 兼容旧版与带 cam_infos 的初始化接口，实际兼容性须在
 设计借鉴 RE3SIM 的外观 3DGS、物理碰撞几何和统一坐标分工；本实现没有把遮挡补全
 归因于其原生功能。合成图不能作为独立真值；优先补拍真实视图。
 
-## 当前验证边界
+## 验证边界
 
-Linux 合成夹具测试覆盖证据完整性、未知/前景排除、刚体零关节、来源校验、哈希自检与
-交接、桌面融合 holdout 隔离、投影及区域权重、子进程失败记录。
-这些测试不证明真实物体语义、多视角几何、SAM 准确率或 3DGS 训练质量。
-真实素材、API 配置、合法 checkpoint、COLMAP 与可用 3DGS 环境齐备后才能执行实际闭环。
+清理前的 Linux 合成夹具覆盖证据、前景排除、刚体蓝图、来源与哈希、桌面融合、投影、区域权重和子进程失败。真实素材上的语义、多视角几何和背景质量需要独立运行结果。 [背景运行及历史结果](RECONSTRUCTION_RUNTIME.md)
 
 3DGS 接口依据官方 [renderer](https://github.com/graphdeco-inria/gaussian-splatting/blob/main/gaussian_renderer/__init__.py)
 和 [GaussianModel](https://github.com/graphdeco-inria/gaussian-splatting/blob/main/scene/gaussian_model.py)，
@@ -160,9 +157,7 @@ Linux 合成夹具测试覆盖证据完整性、未知/前景排除、刚体零�
 终端输入不会回显，命令历史也不包含密钥。其他终端设置的环境变量不会自动进入已启动的
 Codex 进程，请在配置完成后告知运行方式，以便从正确环境启动。
 
-本节早期检查时 COLMAP/3DGS 尚未准备；随后已安装并完成合成三维场景的
-COLMAP 和真实 GPU 短程训练，真实 VLM API 也已接通。当前路径、复现脚本、
-剩余 SAM 权限/素材及验证边界见 [重建运行环境](RECONSTRUCTION_RUNTIME.md)。
+原 Linux 主机后来完成合成场景的 COLMAP、GPU 短程 3DGS 和小规模 VLM API 请求。现有运行入口与当时的实验条件见 [背景重建](RECONSTRUCTION_RUNTIME.md)。
 
 官方接口依据（查阅日期 2026-10-22）：
 [视觉理解与结构化输出](https://help.aliyun.com/en/model-studio/vision-model/)、

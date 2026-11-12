@@ -15,7 +15,7 @@ flowchart LR
 
 ## 配置与入口
 
-在 Studio TOML 中设置 `blender` 和 `usd_python`。`usd_python` 指向能导入 `pxr` 的 Python。声明式场景入口不需要图片、模型凭据或 Artisan SDK。以下是待实际执行的命令示例。
+在 Studio TOML 中设置 `blender` 和 `usd_python`。`usd_python` 指向能导入 `pxr` 的 Python。声明式场景使用本地设计 JSON、Blender 和 OpenUSD。 [配置示例](../configs/studio.example.toml)
 
 ```bash
 scenecreator workflow start \
@@ -46,6 +46,8 @@ scenecreator workflow start \
 
 铰链使用 `{"kind": "hinged_cover", "open_angle_deg": 110}`，生成闭合零位及 `0–110°` 的原生旋转关节。Studio 的 `envcreator_workflow_start` 可在 `params.declared_design` 中提交同样的数据。
 
+`--design` 使用独立的候选构建路径。背景和物理选项保持默认关闭，后续在 Isaac 中单独验收生成的场景包。
+
 ## 螺纹运行时与交付
 
 `execution/isaac_thread.py` 提供 `IsaacThreadRuntime(stage)`。接收端在场景加载并初始化物理后创建实例，在每个 `sim.step()` 前调用 `runtime.step()`。目前钩子默认使用 CPU NumPy tensor view。它从已组成的 USD 关系读取刚体和关节路径，在实际螺钉与底座的相对旋转和轴向位移达到脱扣条件时关闭连接。状态变更写入 session layer；重新载入原始场景可恢复初始装配。新场景还未接入 RoboHelix 的自动加载钩子。
@@ -56,4 +58,4 @@ scenecreator workflow start \
 
 图像和视频仍使用 VLM、SAM 和已有的对象证据、背景遮罩及 COLMAP／3DGS 分支。配置 `usd_python` 后，普通刚体和普通关节资产走 Blender → OpenUSD，Workflow 在场景组装后执行 `export`。背景重建产物仍单独记录，尚未自动对齐并合成到 Isaac 场景。冻结 v9 螺纹台架和旧工具构建保留原 SDK 路径。
 
-本次只修改源码。未执行 Blender、USD 写入、Isaac 仿真、模型调用或测试。批量验证可从同规格不同杆长、不同螺纹规格和不同铰链限位三组输入开始，保存各自的交付包和实际验收结果。
+直接 USD 路径的螺钉盖板和限位铰链已接入源码，实际资产生成与 Isaac 验收仍待完成。批量验收可覆盖同规格不同杆长、不同螺纹规格及不同铰链限位，保存每个样件的交付包和报告。 [七类机械结构草案](MECHANICAL_ASSET_STANDARD.md)

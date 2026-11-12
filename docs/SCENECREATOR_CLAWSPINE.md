@@ -1,6 +1,6 @@
 # SceneCreator × ClawSpine：场景与机器人运行能力的接入
 
-记录日期：2026-10-28。
+原生接入记录始于 2026-10-28。当前导出入口见下文，历史机器人运行结果保留原适用条件。
 
 当前仓库名为 **SceneCreator**，继续维护视觉重建、资产生成、装配语义及验证。
 这一阶段接入 ClawSpine 的原生机器人运行入口。代码保留在当前仓库，不迁入 RoboHelix；
@@ -17,15 +17,15 @@ RoboHelix 的候选进化、研究记忆、调度和评测数据库尚未接入�
   → 原生 DSH 会话、G1 观测、工具、控制与 Dashboard
 ```
 
-`scenecreator generate` 直接调用 `harness/cli.py:main`，执行的仍是
-`harness/run.py:run_harness`，没有复制一套生成流水线。
+配置 `usd_python` 时，固定 Workflow 会组装并导出候选场景包。`scenecreator generate` 仍可通过 `harness/cli.py` 调用多对象 `run_harness`，再使用 `handoff` 打包。已知规格场景由专用入口直接打包，其新螺纹钩子尚待接收端挂载。 [直接生成 Isaac USD](ISAAC_USD_WORKFLOW.md)
 
 | 已有方法 | 在 SceneCreator 中的环节 | 代码入口 |
 | --- | --- | --- |
 | VLM | 对象候选、实例语义、部件／关节蓝图、预览复审与修复建议 | `pipeline.py`、`construction/design.py`、`harness/geometry.py` |
 | SAM3，或配置的 Grounding DINO + SAM2.1 | 对象可见区域的分割与证据裁剪 | `pipeline.py`、`video_pipeline.py` |
 | Blender | 按几何 recipe 生成部件网格及多视角预览 | `harness/blender_recipe.py` |
-| Artisan | 把部件与关节蓝图编译为 USD、URDF、MJCF | `harness/geometry.py` |
+| OpenUSD | 写入普通物理资产和场景，收集交付依赖 | `harness/usd_writer.py`、`integration/bundle.py` |
+| Artisan | 旧资产导出和冻结 v9 兼容构建 | `harness/geometry.py`、`construction/artisan_backend.py` |
 | Isaac | 在独立运行环境执行已有受力、关节及传动检查 | `harness/physics.py` |
 | COLMAP、3DGS | 可选的相机估计与背景训练；视觉背景与物理碰撞的验证状态分别记录 | `construction/reconstruction.py`、`train_worker.py` |
 
@@ -33,7 +33,7 @@ RoboHelix 的候选进化、研究记忆、调度和评测数据库尚未接入�
 原生模型会话、观测和工具循环、G1 控制、人工停止及取消。当前接入后仍是
 SceneCreator 生成阶段与 ClawSpine 机器人会话两个阶段；机器人失败还不会自动触发 SceneCreator 重建。
 
-## 新增代码
+## 交付与启动代码
 
 | 文件 | 行为 |
 | --- | --- |
@@ -50,6 +50,7 @@ SceneCreator 生成阶段与 ClawSpine 机器人会话两个阶段；机器人�
 bundle/
   manifest.json           # 文件哈希、原交付状态、USD 检查与源资源哈希
   metadata/delivery.json  # 原交付文件的完整字节副本
+  metadata/assembly_rules.json  # 已知规格场景随包保存的蓝图和规则
   scene/
     scene.usda
     deps/                 # 实际引用的 USD layers、贴图等
@@ -76,25 +77,15 @@ layers 输出为文本 USDA，避免写入比仿真端更新的二进制 crate �
 .venv/bin/scenecreator generate --help
 ```
 
-生成命令与 [现有 Harness](AGENTIC_HARNESS.md) 相同，仅将 `scene-harness` 换成
-`scenecreator generate`。不提供隐式 VLM 模型、SAM 权重或 Artisan 环境。
+多对象生成可用 `scenecreator generate` 或 `scene-harness`，所需配置见 [批处理 Harness](AGENTIC_HARNESS.md)。
 
-交付包生成需要一个安装 `usd-core` 的独立 Python。当前主机已准备：
-
-```text
-/home/felixz/.local/share/roboenv/envcreator-usd-env/bin/python
-```
-
-其他机器可单独创建环境并安装 `usd-core==26.11`；这只是 OpenUSD 文件处理环境，
-不包含 Isaac、机器人控制器或模型。
-
-以已有茶饮料瓶视频场景为例：
+交付包生成需要独立的 OpenUSD Python。将下例的 `--delivery` 和 `--usd-python` 换成实际交付记录和能导入 `pxr` 的解释器。
 
 ```bash
 .venv/bin/scenecreator handoff \
-  --delivery outputs/harness-live-video-20261027-v5/delivery/delivery.json \
+  --delivery /absolute/path/delivery/delivery.json \
   --output outputs/new-clawspine-bundle \
-  --usd-python /home/felixz/.local/share/roboenv/envcreator-usd-env/bin/python
+  --usd-python /absolute/path/openusd-python
 
 .venv/bin/scenecreator inspect --bundle outputs/new-clawspine-bundle
 ```
@@ -107,7 +98,7 @@ layers 输出为文本 USDA，避免写入比仿真端更新的二进制 crate �
 ```bash
 .venv/bin/scenecreator clawspine \
   --bundle outputs/new-clawspine-bundle \
-  --clawspine-root /home/felixz/RoboHelix \
+  --clawspine-root /absolute/path/ClawSpine \
   --spawn 1,0,0,0 \
   --observer-eye 1,-4,2 \
   --observer-target 0,0,0.8 \
@@ -117,11 +108,11 @@ layers 输出为文本 USDA，避免写入比仿真端更新的二进制 crate �
 
 原 Linux 主机 ClawSpine 源码位于 `/home/felixz/RoboHelix` 的现有 checkout 内；这里只引用其中
 的原生启动器，不启动 RoboHelix campaign，也不导入其 evolution controller。
-当前绑定的提交为 `02cad34a60871d9b1a9d0a1916b10eb5e69ad098`。运行回执记录
+原接入记录绑定提交 `02cad34a60871d9b1a9d0a1916b10eb5e69ad098`。运行回执记录
 checkout 提交、启动文件哈希、交付包 manifest 哈希、场景与指定坐标。
 
 `--dry-run` 检查文件与真实启动器的参数解析，不启动 Isaac、DSH 模型或机器人。
-改用 `--doctor` 会进一步检查原 Linux 主机运行依赖，模型鉴权仍以真实调用为准。
+`--doctor` 进一步检查当前主机的运行依赖，模型鉴权以实际调用结果为准。
 上面的出生点与相机仅用于接口检查，尚未做防穿透、站立及可达性验证。
 
 准备好 ClawSpine 自身所需的 Node 24、锁定的依赖、Isaac 容器和控制器权重后，
@@ -132,15 +123,15 @@ checkout 提交、启动文件哈希、交付包 manifest 哈希、场景与指�
 
 现在也可追加 `--dsh-model-config configs/local-dsh-model.toml`，把独立中转配置传给原生 `llm-pi-ai`。原 Linux 主机 `gpt-6.1-sol` 已通过 Responses 协议完成一次 SceneCreator 插件调用；配置与验证范围见 [DSH 模型配置](DSH_MODEL.md)。后文 Qwen 运行属于历史实验，不是当前模型绑定。
 
-## 机器人测试场景与原生任务
+## 机器人测试场景与历史运行
 
-已有视频交付包含桌面和瓶子，没有供人形机器人站立的地板。用单独命令派生测试场景：
+已有交付若缺少机器人站立平面，可通过独立命令派生带地板的测试场景。
 
 ```bash
 .venv/bin/scenecreator robot-scene \
   --bundle outputs/new-clawspine-bundle \
   --output outputs/new-g1-test-scene \
-  --usd-python /home/felixz/.local/share/roboenv/envcreator-usd-env/bin/python \
+  --usd-python /absolute/path/openusd-python \
   --floor-z 0 --floor-size 6 6
 ```
 

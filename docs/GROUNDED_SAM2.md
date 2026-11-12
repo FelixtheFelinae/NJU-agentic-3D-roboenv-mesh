@@ -64,9 +64,9 @@ checkpoint、Grounding DINO 目录的相对路径均相对 TOML 所在目录解�
 
 `run.json` 使用 `grounded_sam2` 记录模型执行；tracking manifest 记录 `grounded_sam2_video`。保存 SAM checkpoint 和 Grounding DINO snapshot 文件 SHA256；不会将替代模型记录为 SAM 3 执行。建议另行记录 SAM 2 源码 git revision。
 
-## 当前验证
+## 历史验证
 
-本次新增测试覆盖文字 query 与候选对应、框回退开关、非零参考帧双向传播、原生 ID 返回顺序变化、缺帧失败与状态清理，以及路径解析。测试使用接口 stub，不代表真实模型推理或精度验证。当前全套测试 61 通过、1 跳过。下述真实 CUDA 测试独立于接口 stub 测试。
+清理前的接口测试覆盖文字 query 与候选对应、框回退、参考帧双向传播、原生 ID 顺序、缺帧与状态清理。该版本全套测试通过 61 项、跳过 1 项。下述真实 CUDA 运行有单独记录。
 
 
 ## 本机真实 CUDA 测试（2026-10-22）

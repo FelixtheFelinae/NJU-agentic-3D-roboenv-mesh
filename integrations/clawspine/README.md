@@ -1,6 +1,6 @@
 # 外部 ClawSpine 启动器补丁
 
-EnvCreator 通过 `src/roboenv_perception/integration/` 调用外部 ClawSpine checkout，
+SceneCreator 通过 `src/roboenv_perception/integration/` 调用外部 ClawSpine checkout，
 不复制机器人运行循环，也不依赖 RoboHelix 的 evolution controller。
 
 `local-image-id.patch` 对应本轮外部源码基线
@@ -11,9 +11,9 @@ EnvCreator 通过 `src/roboenv_perception/integration/` 调用外部 ClawSpine c
 本机 `/home/felixz/RoboHelix` 已应用该修改，无需重复应用。迁移到同一基线的新 checkout 时：
 
 ```bash
-git -C /path/to/RoboHelix apply --check /path/to/EnvCreator/integrations/clawspine/local-image-id.patch
-git -C /path/to/RoboHelix apply /path/to/EnvCreator/integrations/clawspine/local-image-id.patch
+git -C /path/to/RoboHelix apply --check /path/to/SceneCreator/integrations/clawspine/local-image-id.patch
+git -C /path/to/RoboHelix apply /path/to/SceneCreator/integrations/clawspine/local-image-id.patch
 ```
 
 补丁附带对应的启动器测试与中英文说明，不包含镜像、模型权重、场景或密钥。
-完整调用方式和本轮实际 G1 运行结果见 [接入文档](../../docs/ENVCREATOR_CLAWSPINE.md)。
+完整调用方式和本轮实际 G1 运行结果见 [接入文档](../../docs/SCENECREATOR_CLAWSPINE.md)。

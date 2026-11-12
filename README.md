@@ -1,4 +1,4 @@
-# EnvCreator Agent Harness
+# SceneCreator
 
 从图片、离线视频或明确的零件规格构建 Isaac Sim 场景，为 RoboHelix 等下游系统提供带来源记录的交互资产和 USD 场景包。
 
@@ -41,24 +41,26 @@ flowchart TD
 
 *螺钉盖板设计示意。盖板孔按螺杆外径留间隙，底座内螺纹由导程约束表示，螺钉在 USD 中保留独立刚体。尺寸和脱扣行为待 Isaac 验收。*
 
-`envcreator workflow start --design` 接收 M3、M4、M5 不同杆长的螺钉盖板，或指定开角的限位铰链。已知规格入口由 Blender 建模、OpenUSD 写出候选包。螺纹预紧、起拧和续拧阻力、脱扣由 Isaac 步前钩子处理。接入方式和输入示例见 [Isaac USD 工作流](docs/ISAAC_USD_WORKFLOW.md)。
+`scenecreator workflow start --design` 接收 M3、M4、M5 不同杆长的螺钉盖板，或指定开角的限位铰链。已知规格入口由 Blender 建模、OpenUSD 写出候选包。螺纹预紧、起拧和续拧阻力、脱扣由 Isaac 步前钩子处理。接入方式和输入示例见 [Isaac USD 工作流](docs/ISAAC_USD_WORKFLOW.md)。
 
 ## 使用入口
 
 ```bash
 python -m pip install --no-deps -e .
-envcreator --help
-envcreator workflow start --help
-envcreator studio --help
+scenecreator --help
+scenecreator workflow start --help
+scenecreator studio --help
 scene-perception --help
 ```
 
-- `envcreator workflow start / advance` 执行固定流程、提交决策或恢复。
-- `envcreator studio` 提供原生 DSH 会话、证据、候选、调用记录和资源状态。
-- `envcreator generate` 执行已有多对象构建 Harness。
+- `scenecreator workflow start / advance` 执行固定流程、提交决策或恢复。
+- `scenecreator studio` 提供原生 DSH 会话、证据、候选、调用记录和资源状态。
+- `scenecreator generate` 执行已有多对象构建 Harness。
 - `scene-perception` 提供感知、证据、背景和独立构建阶段。
-- `envcreator handoff / inspect` 打包并核对 USD 依赖。
-- `envcreator tool / tool-test` 保留电动螺丝刀生成与运行时功能验证。
+- `scenecreator handoff / inspect` 打包并核对 USD 依赖。
+- `scenecreator tool / tool-test` 保留电动螺丝刀生成与运行时功能验证。
+
+旧 `envcreator` 命令仍是兼容入口。既有 DSH 工具名和场景包格式沿用原有标识。
 
 模型推理、Blender 建模、OpenUSD 导出和 Isaac 物理验证需要准备各自的运行环境。旧工具及冻结 v9 台架仍使用 Artisan。Linux/NVIDIA 执行路径见 [环境配置](docs/HOST_SETUP.md)。Mac 可用于代码维护与入口、构建检查。
 

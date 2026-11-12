@@ -1,4 +1,4 @@
-"""USD-only export and runtime motor adapter. Does not require EnvCreator imports."""
+"""USD-only export and runtime motor adapter. Does not require SceneCreator imports."""
 
 import argparse
 import hashlib

@@ -1,6 +1,6 @@
 # ClawSpine 原生 DSH 模型配置
 
-DSH 的任务模型与 EnvCreator 内部 VLM 分开。`integration/dsh_model.py` 读取本机 TOML，生成原生 `llm-pi-ai` 的 provider patch；密钥仅经 `ENVCREATOR_DSH_API_KEY` 传给 DSH 进程。没有额外模型聊天循环，不读取 `VLM_API_KEY`，不自动回退模型。
+DSH 的任务模型与 SceneCreator 内部 VLM 分开。`integration/dsh_model.py` 读取本机 TOML，生成原生 `llm-pi-ai` 的 provider patch；密钥仅经 `ENVCREATOR_DSH_API_KEY` 传给 DSH 进程。没有额外模型聊天循环，不读取 `VLM_API_KEY`，不自动回退模型。
 
 ## 填写和检查
 
@@ -16,20 +16,20 @@ api_key = "" # 只在本机填写
 `api_protocol` 支持 `responses` 或 `chat_completions`，按服务商实际协议选择。可选的 `context_window`、`max_tokens` 是本地容量声明；未填写时使用适配器保守默认值，不能视为服务商已验证的容量。
 
 ```bash
-.venv/bin/envcreator dsh-model --config configs/local-dsh-model.toml
+.venv/bin/scenecreator dsh-model --config configs/local-dsh-model.toml
 ```
 
 该命令只检查配置，输出不含密钥，不请求模型。`configs/local*.toml` 已被 Git 忽略。
 
 ## 原生机器人入口
 
-原有 `envcreator clawspine` 命令追加：
+原有 `scenecreator clawspine` 命令追加：
 
 ```bash
   --dsh-model-config configs/local-dsh-model.toml
 ```
 
-适配器将模型选择、provider patch 和独立凭据名称交给原生 `launch_dsh_rsi.mjs`，关闭其他 provider 的自动继承。已有 EnvCreator 插件 patch 可以继续通过 `--native-extra-patch` 加载，两者合并后由原生启动器留存。模型配置不可与其他原生模型参数同时指定。
+适配器将模型选择、provider patch 和独立凭据名称交给原生 `launch_dsh_rsi.mjs`，关闭其他 provider 的自动继承。已有 SceneCreator 插件 patch 可以继续通过 `--native-extra-patch` 加载，两者合并后由原生启动器留存。模型配置不可与其他原生模型参数同时指定。
 
 `--dry-run` 检查原生参数和场景绑定；真实启动仍使用锁定的 Isaac 容器，`--dry-run` 不能证明模型或机器人已运行。
 
@@ -45,7 +45,7 @@ api_key = "" # 只在本机填写
 
 私有 TOML 可添加 `models = ["gpt-6.1-sol", "gpt-6-astra"]`，`model` 继续指定默认项。
 两项共享该文件的 API 地址、Responses 协议和独立 DSH 凭据，不读取 VLM 密钥。
-使用 `envcreator clawspine ... --dsh-model-config configs/local-dsh-model.toml --dsh-model gpt-6-astra`
+使用 `scenecreator clawspine ... --dsh-model-config configs/local-dsh-model.toml --dsh-model gpt-6-astra`
 在启动时显式选择。未注册的模型会报错，不回退。
 
 托管机器人会话的模型由启动配置固定；新增选项不热切换正在运行的会话。对比测试应分别启动、

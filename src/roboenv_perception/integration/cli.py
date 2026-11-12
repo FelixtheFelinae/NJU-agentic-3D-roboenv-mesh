@@ -1,4 +1,4 @@
-"""EnvCreator entry point: generate environments and reuse ClawSpine capabilities."""
+"""SceneCreator entry point: generate environments and reuse ClawSpine capabilities."""
 
 import argparse
 import json
@@ -41,17 +41,17 @@ def main(argv=None) -> int:
             os.execvpe("node", ["node", str(Path(__file__).with_name(script)), *argv[1:]],
                        {**os.environ, "ENVCREATOR_PYTHON": sys.executable})
         except OSError as exc:
-            print(f"EnvCreator: cannot start the ClawSpine adapter: {exc}", file=sys.stderr)
+            print(f"SceneCreator: cannot start the ClawSpine adapter: {exc}", file=sys.stderr)
             return 2
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog="scenecreator", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("studio", help="Open the native DSH EnvCreator asset workbench")
+    commands.add_parser("studio", help="Open the native DSH SceneCreator asset workbench")
     commands.add_parser("workflow", help="Run or advance the fixed reconstruction workflow")
     commands.add_parser("generate", help="Run the existing video/image construction harness")
     commands.add_parser("background", help="Run optional local background outpainting on existing evidence")
     commands.add_parser("dsh-model", help="Check independent local DSH gateway settings without printing secrets")
     commands.add_parser("clawspine", help="Load a bundle using ClawSpine's native G1 entry")
-    tool = commands.add_parser("tool", help="Build a reference-informed robot tool using EnvCreator geometry")
+    tool = commands.add_parser("tool", help="Build a reference-informed robot tool using SceneCreator geometry")
     tool.add_argument("kind", choices=["electric-screwdriver"])
     tool.add_argument("--output", type=Path, required=True)
     tool.add_argument("--artisan-python", type=Path, required=True)
@@ -61,7 +61,7 @@ def main(argv=None) -> int:
     tool_test.add_argument("--asset", type=Path, required=True)
     tool_test.add_argument("--output", type=Path, required=True)
     tool_test.add_argument("--isaac-python", type=Path, required=True)
-    profile = commands.add_parser("dsh-tool-profile", help="Prepare the EnvCreator native DSH plugin binding")
+    profile = commands.add_parser("dsh-tool-profile", help="Prepare the SceneCreator native DSH plugin binding")
     profile.add_argument("--asset", type=Path, required=True)
     profile.add_argument("--validation", type=Path)
     profile.add_argument("--output", type=Path, required=True)
@@ -104,7 +104,7 @@ def main(argv=None) -> int:
         else:
             result = export_bundle(args.delivery, args.output, args.usd_python) if args.command == "handoff" else inspect_bundle(args.bundle)
     except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
-        parser.exit(2, f"EnvCreator: {exc}\n")
+        parser.exit(2, f"SceneCreator: {exc}\n")
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if args.command == "tool-test":
         return 0 if result["status"] == "ideal_tool_verified" else 2

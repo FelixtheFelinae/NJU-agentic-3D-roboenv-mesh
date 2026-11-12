@@ -18,7 +18,7 @@ flowchart LR
 在 Studio TOML 中设置 `blender` 和 `usd_python`。`usd_python` 指向能导入 `pxr` 的 Python。声明式场景入口不需要图片、模型凭据或 Artisan SDK。以下是待实际执行的命令示例。
 
 ```bash
-envcreator workflow start \
+scenecreator workflow start \
   --config configs/local-studio.toml \
   --task '生成一组可拆螺钉盖板' \
   --design /absolute/path/to/screw-cover.json \

@@ -30,14 +30,14 @@ function backend(config) {
     if (image && response.ok) {
       if (!response.headers.get("content-type")?.startsWith("image/jpeg") ||
           Number(response.headers.get("content-length")) > 512 * 1024)
-        throw new Error("Unexpected EnvCreator preview");
+        throw new Error("Unexpected SceneCreator preview");
       const bytes = Buffer.from(await response.arrayBuffer());
-      if (bytes.length > 512 * 1024) throw new Error("EnvCreator preview exceeds budget");
+      if (bytes.length > 512 * 1024) throw new Error("SceneCreator preview exceeds budget");
       return bytes;
     }
     const value = await response.json();
     if (!response.ok)
-      throw new Error(value.detail ?? `EnvCreator HTTP ${response.status}`);
+      throw new Error(value.detail ?? `SceneCreator HTTP ${response.status}`);
     return value;
   };
 }
@@ -115,7 +115,7 @@ export function registerTools(ctx, config) {
       }}],
     ...(config.debugComponentTools ? [[
       "generate",
-      "Reconstruct uploaded images or one video through the existing full EnvCreator Harness. Task must preserve user requirements. Each call creates a separate run; parent_id records lineage but does not edit or reuse an old mesh. Returns only after execution ends. Robot control is unavailable.",
+      "Reconstruct uploaded images or one video through the existing full SceneCreator Harness. Task must preserve user requirements. Each call creates a separate run; parent_id records lineage but does not edit or reuse an old mesh. Returns only after execution ends. Robot control is unavailable.",
       {
         task: { type: "string", minLength: 3, maxLength: 4000 },
         input_ids: {
@@ -130,7 +130,7 @@ export function registerTools(ctx, config) {
   ];
   for (const component of config.debugComponentTools ? components.filter(c => !c.id.startsWith("workflow_")) : []) definitions.push([
     component.id,
-    `${component.title}. EnvCreator internal component. Input sources map roles to completed run IDs: ${JSON.stringify(component.inputs)}. Outputs: ${component.outputs.join(", ")}. Returns after execution, preserves versions. Use context/inspect for IDs. For single images use ingest -> inventory -> segment -> label; perceive handles video/multi-image. blueprint/geometry edits accept a previous source and full corrected task. Physics and scene export do not operate a robot.`,
+    `${component.title}. SceneCreator internal component. Input sources map roles to completed run IDs: ${JSON.stringify(component.inputs)}. Outputs: ${component.outputs.join(", ")}. Returns after execution, preserves versions. Use context/inspect for IDs. For single images use ingest -> inventory -> segment -> label; perceive handles video/multi-image. blueprint/geometry edits accept a previous source and full corrected task. Physics and scene export do not operate a robot.`,
     { task: {type: "string", maxLength: 4000},
       input_ids: {type: "array", items: {type: "string"}, maxItems: 32},
       sources: {type: "object", additionalProperties: {type: "string"}},
@@ -253,7 +253,7 @@ export function apply(ctx, config) {
     name: "envcreator:studio",
     order: 130,
     text: () =>
-      "You are the native DSH task agent in EnvCreator Studio. Use context, then workflow_start for a new single-object reconstruction. EnvCreator runs perception, modeling and verification in a fixed order. You decide what evidence and structure to use. For video, read the timestamped original contact sheet: choose the window, sampling rate, frame budget and a reference frame with the target visible. Name the view or motion you need when requesting a revisit. At target selection, match the actual mask/context and justify whether the new track is the same object; never match by category alone. Review the structure, its evidence and unknowns before accepting or revising the proposed hypothesis. Follow allowed_actions and revision, using the original workflow_id for advancement. Treat candidate renders as diagnostic only. If no new observation can answer the question, stop with the remaining uncertainty. Background and physics run only if explicitly requested. Read the actual validation scope; workflow completion, visual acceptance and physical function are separate. On interruption, resume without changing the task. Summarize useful evidence and decisions in Chinese. EnvCreator VLM credentials are independent of your task model. No robot operation is registered." +
+      "You are the native DSH task agent in SceneCreator Studio. Use context, then workflow_start for a new single-object reconstruction. SceneCreator runs perception, modeling and verification in a fixed order. You decide what evidence and structure to use. For video, read the timestamped original contact sheet: choose the window, sampling rate, frame budget and a reference frame with the target visible. Name the view or motion you need when requesting a revisit. At target selection, match the actual mask/context and justify whether the new track is the same object; never match by category alone. Review the structure, its evidence and unknowns before accepting or revising the proposed hypothesis. Follow allowed_actions and revision, using the original workflow_id for advancement. Treat candidate renders as diagnostic only. If no new observation can answer the question, stop with the remaining uncertainty. Background and physics run only if explicitly requested. Read the actual validation scope; workflow completion, visual acceptance and physical function are separate. On interruption, resume without changing the task. Summarize useful evidence and decisions in Chinese. SceneCreator VLM credentials are independent of your task model. No robot operation is registered." +
       " On evidence revisit, retain useful original views: the workflow fuses raw observations after your explicit identity decision. If more than 16 distinct frames are available, use observation tickets to select the useful old/new views. For a separate build candidate you may use propose_build with explicitly assumed scale/limits; bind it to the canonical blueprint hash and actual view refs. Canonical unknowns stay unknown, relative units cannot become metres, and adopted assumptions must pass independent review, recipe conformance and the original geometry gates." +
       " For a screw cover or hinge with explicit design parameters, submit workflow_start with params.declared_design. Preserve user-specified dimensions and mechanics. Report the USD bundle as a candidate pending Isaac validation." +
       (config.debugComponentTools ? " Debug and legacy component tools are available for explicit component experiments." : ""),
@@ -328,6 +328,6 @@ export function apply(ctx, config) {
           }
         },
       }),
-    "EnvCreator authenticated asset routes",
+    "SceneCreator authenticated asset routes",
   );
 }

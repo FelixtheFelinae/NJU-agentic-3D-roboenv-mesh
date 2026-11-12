@@ -1,4 +1,4 @@
-# Run from the EnvCreator repository root. Native DSH 0.2.1-alpha.1 / Node 24.
+# Run from the SceneCreator repository root. Native DSH 0.2.1-alpha.1 / Node 24.
 dsh_root = "/path/to/ClawSpine"
 # Separate DSH gateway credentials; omit for asset browsing without model requests.
 # model_config_path = "configs/local-dsh-model.toml"
@@ -22,4 +22,4 @@ background_mode = "auto"
 # artisan_python = "/path/to/Artisan/python"
 # blender = "/path/to/blender"
 # isaac_python = "/path/to/isaac/python.sh"
-# env_file = ".env.local" # Passed only to the EnvCreator worker, never DSH.
+# env_file = ".env.local" # Passed only to the SceneCreator worker, never DSH.

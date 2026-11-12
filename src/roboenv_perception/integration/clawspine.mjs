@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Reuse native ClawSpine; EnvCreator never owns a second robot agent loop. */
+/** Reuse native ClawSpine; SceneCreator never owns a second robot agent loop. */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -25,14 +25,14 @@ export async function prepareClawSpine(argv, { python = process.env.ENVCREATOR_P
       if (own[option] || !value || value.startsWith('--')) throw new Error('Missing or duplicate ' + option);
       own[option] = resolve(value);
     } else {
-      if (['--scene-usd', '--scene-config', '--scene-id'].includes(option)) throw new Error('Scene identity comes from the EnvCreator bundle');
+      if (['--scene-usd', '--scene-config', '--scene-id'].includes(option)) throw new Error('Scene identity comes from the SceneCreator bundle');
       nativeArgs.push(option);
     }
   }
   if (!own['--bundle'] || !own['--clawspine-root']) throw new Error('--bundle and --clawspine-root are required');
   const inspected = spawnSync(python, ['-m', 'roboenv_perception.integration.cli', 'inspect', '--bundle', own['--bundle']], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
   if (inspected.error) throw inspected.error;
-  if (inspected.status !== 0) throw new Error('EnvCreator bundle rejected: ' + inspected.stderr.trim());
+  if (inspected.status !== 0) throw new Error('SceneCreator bundle rejected: ' + inspected.stderr.trim());
   const bundle = JSON.parse(inspected.stdout);
   const root = own['--clawspine-root'], launcher = join(root, 'scripts/launch_dsh_rsi.mjs');
   if (!existsSync(launcher)) throw new Error('ClawSpine source needs scripts/launch_dsh_rsi.mjs');
@@ -78,7 +78,7 @@ export async function prepareClawSpine(argv, { python = process.env.ENVCREATOR_P
 
 export async function main(argv) {
   if (argv.includes('--help')) {
-    console.log(`Usage: envcreator clawspine --bundle DIRECTORY --clawspine-root CHECKOUT
+    console.log(`Usage: scenecreator clawspine --bundle DIRECTORY --clawspine-root CHECKOUT
   --spawn X,Y,FLOOR_Z,YAW --observer-eye X,Y,Z --observer-target X,Y,Z
   [--dsh-model-config PRIVATE_TOML] [--dsh-model MODEL_ID]
   [--dry-run | --doctor] [--receipt NEW_JSON_FILE] [native ClawSpine launcher options]
@@ -119,5 +119,5 @@ No robot task is automatically submitted. Delivery status is preserved verbatim.
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main(process.argv.slice(2)).catch(error => { console.error('EnvCreator: ' + error.message); process.exitCode = 1; });
+  main(process.argv.slice(2)).catch(error => { console.error('SceneCreator: ' + error.message); process.exitCode = 1; });
 }

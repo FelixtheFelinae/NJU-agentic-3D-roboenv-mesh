@@ -1,8 +1,8 @@
-# EnvCreator × ClawSpine：场景与机器人运行能力的接入
+# SceneCreator × ClawSpine：场景与机器人运行能力的接入
 
 记录日期：2026-10-28。
 
-当前仓库暂定名为 **EnvCreator**，继续维护视觉重建、资产生成、装配语义及验证。
+当前仓库名为 **SceneCreator**，继续维护视觉重建、资产生成、装配语义及验证。
 这一阶段接入 ClawSpine 的原生机器人运行入口。代码保留在当前仓库，不迁入 RoboHelix；
 RoboHelix 的候选进化、研究记忆、调度和评测数据库尚未接入。
 
@@ -10,17 +10,17 @@ RoboHelix 的候选进化、研究记忆、调度和评测数据库尚未接入�
 
 ```text
 描述 + 视频／多图片
-  → EnvCreator：感知 → 证据 → 蓝图 → 几何 → 审查／修复 → 场景与物理检查
+  → SceneCreator：感知 → 证据 → 蓝图 → 几何 → 审查／修复 → 场景与物理检查
   → delivery.json + scene.usda
   → integration/bundle.py：场景交付包
   → integration/clawspine.mjs：ClawSpine 原生启动入口
   → 原生 DSH 会话、G1 观测、工具、控制与 Dashboard
 ```
 
-`envcreator generate` 直接调用 `harness/cli.py:main`，执行的仍是
+`scenecreator generate` 直接调用 `harness/cli.py:main`，执行的仍是
 `harness/run.py:run_harness`，没有复制一套生成流水线。
 
-| 已有方法 | 在 EnvCreator 中的环节 | 代码入口 |
+| 已有方法 | 在 SceneCreator 中的环节 | 代码入口 |
 | --- | --- | --- |
 | VLM | 对象候选、实例语义、部件／关节蓝图、预览复审与修复建议 | `pipeline.py`、`construction/design.py`、`harness/geometry.py` |
 | SAM3，或配置的 Grounding DINO + SAM2.1 | 对象可见区域的分割与证据裁剪 | `pipeline.py`、`video_pipeline.py` |
@@ -31,13 +31,13 @@ RoboHelix 的候选进化、研究记忆、调度和评测数据库尚未接入�
 
 新适配层只消费已经生成的交付结果，不重新运行上述模型。ClawSpine 继续拥有
 原生模型会话、观测和工具循环、G1 控制、人工停止及取消。当前接入后仍是
-EnvCreator 生成阶段与 ClawSpine 机器人会话两个阶段；机器人失败还不会自动触发 EnvCreator 重建。
+SceneCreator 生成阶段与 ClawSpine 机器人会话两个阶段；机器人失败还不会自动触发 SceneCreator 重建。
 
 ## 新增代码
 
 | 文件 | 行为 |
 | --- | --- |
-| `src/roboenv_perception/integration/cli.py` | 提供 `envcreator generate/handoff/inspect/robot-scene/clawspine`；原来的 `scene-harness`、`scene-perception` 保留 |
+| `src/roboenv_perception/integration/cli.py` | 提供 `scenecreator generate/handoff/inspect/robot-scene/clawspine`；原来的 `scene-harness`、`scene-perception` 保留 |
 | `integration/bundle.py` | 读取 `delivery.json`，调用独立 OpenUSD worker，保存资源清单与 SHA-256，校验交付包 |
 | `integration/usd_worker.py` | 用 OpenUSD 查找本地依赖，按每个原始 layer 的锚点重写引用和贴图路径，重新加载并检查依赖与关节目标 |
 | `integration/robot_scene.py` | 在原场景之外派生带静态地板的机器人测试场景，记录地板尺寸、接触参数假设和原交付哈希；新交付仍为 `unverified` |
@@ -73,11 +73,11 @@ layers 输出为文本 USDA，避免写入比仿真端更新的二进制 crate �
 
 ```bash
 .venv/bin/python -m pip install --no-deps -e .
-.venv/bin/envcreator generate --help
+.venv/bin/scenecreator generate --help
 ```
 
 生成命令与 [现有 Harness](AGENTIC_HARNESS.md) 相同，仅将 `scene-harness` 换成
-`envcreator generate`。不提供隐式 VLM 模型、SAM 权重或 Artisan 环境。
+`scenecreator generate`。不提供隐式 VLM 模型、SAM 权重或 Artisan 环境。
 
 交付包生成需要一个安装 `usd-core` 的独立 Python。当前主机已准备：
 
@@ -91,12 +91,12 @@ layers 输出为文本 USDA，避免写入比仿真端更新的二进制 crate �
 以已有茶饮料瓶视频场景为例：
 
 ```bash
-.venv/bin/envcreator handoff \
+.venv/bin/scenecreator handoff \
   --delivery outputs/harness-live-video-20261027-v5/delivery/delivery.json \
   --output outputs/new-clawspine-bundle \
   --usd-python /home/felixz/.local/share/roboenv/envcreator-usd-env/bin/python
 
-.venv/bin/envcreator inspect --bundle outputs/new-clawspine-bundle
+.venv/bin/scenecreator inspect --bundle outputs/new-clawspine-bundle
 ```
 
 输出路径必须不存在。`delivery.json` 没有有效 `scene_usd` 时，会要求先完成场景生成。
@@ -105,7 +105,7 @@ layers 输出为文本 USDA，避免写入比仿真端更新的二进制 crate �
 接入 ClawSpine 时，显式指定它的源代码 checkout，并使用原启动器要求的出生点与相机参数：
 
 ```bash
-.venv/bin/envcreator clawspine \
+.venv/bin/scenecreator clawspine \
   --bundle outputs/new-clawspine-bundle \
   --clawspine-root /home/felixz/RoboHelix \
   --spawn 1,0,0,0 \
@@ -130,14 +130,14 @@ checkout 提交、启动文件哈希、交付包 manifest 哈希、场景与指�
 新会话就绪后，在它的 run 目录写入 `envcreator-handoff.json`。启动不会自动提交机器人任务，
 也没有添加一个代替原生 DSH 的聊天或控制循环。
 
-现在也可追加 `--dsh-model-config configs/local-dsh-model.toml`，把独立中转配置传给原生 `llm-pi-ai`。原 Linux 主机 `gpt-6.1-sol` 已通过 Responses 协议完成一次 EnvCreator 插件调用；配置与验证范围见 [DSH 模型配置](DSH_MODEL.md)。后文 Qwen 运行属于历史实验，不是当前模型绑定。
+现在也可追加 `--dsh-model-config configs/local-dsh-model.toml`，把独立中转配置传给原生 `llm-pi-ai`。原 Linux 主机 `gpt-6.1-sol` 已通过 Responses 协议完成一次 SceneCreator 插件调用；配置与验证范围见 [DSH 模型配置](DSH_MODEL.md)。后文 Qwen 运行属于历史实验，不是当前模型绑定。
 
 ## 机器人测试场景与原生任务
 
 已有视频交付包含桌面和瓶子，没有供人形机器人站立的地板。用单独命令派生测试场景：
 
 ```bash
-.venv/bin/envcreator robot-scene \
+.venv/bin/scenecreator robot-scene \
   --bundle outputs/new-clawspine-bundle \
   --output outputs/new-g1-test-scene \
   --usd-python /home/felixz/.local/share/roboenv/envcreator-usd-env/bin/python \
@@ -170,4 +170,4 @@ NVIDIA 发布的 SHA-256 校验。源码固定不等于传递依赖全部固定�
 
 ## 历史运行记录
 
-独立机器人 smoke 入口及专用实验已移除。历史镜像、模型和机器人运行结果见[清理前记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/ENVCREATOR_CLAWSPINE.md)。这些记录属于原 Linux 主机，不能作为当前 Mac 环境已部署或通过物理验证的证明。
+独立机器人 smoke 入口及专用实验已移除。历史镜像、模型和机器人运行结果见[清理前记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/ENVCREATOR_CLAWSPINE.md)。这些记录属于原 Linux 主机，不能作为当前 Mac 环境已部署或通过物理验证的证明。

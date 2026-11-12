@@ -1,6 +1,6 @@
 # Artisan 后端拆分：第一轮实现
 
-本轮把 EnvCreator 对 Artisan 的执行边界从模型调用适配器中移出，保留原有 SDK、生成代码和 DSH 会话。未修改外部 Artisan 源码，未新增任务模型循环，也未实现 Mechanical Assembly IR。
+本轮把 SceneCreator 对 Artisan 的执行边界从模型调用适配器中移出，保留原有 SDK、生成代码和 DSH 会话。未修改外部 Artisan 源码，未新增任务模型循环，也未实现 Mechanical Assembly IR。
 
 ## 实际调用路径
 
@@ -55,7 +55,7 @@ qa = run_artisan(python, bundle, mode="qa")
 - `schema_version = envcreator.artisan-result/1`。
 - `request_id`、`operation` 与本次请求对应。
 - `input_sha256`：存在的 `model.py`、`blueprint.json`、`recipe.json`、`build-spec.json` 和整个 `inputs/` 文件树；QA 额外绑定测试源，export 额外绑定编译结果。
-- `worker_sha256`、`backend_sha256`：绑定本轮 EnvCreator 执行器代码。
+- `worker_sha256`、`backend_sha256`：绑定本轮 SceneCreator 执行器代码。
 - `phases`：分别记录 compile / export / qa / union 的 `passed`、`failed`、`not_run`。
 - `artifact_sha256`：记录当前编译报告以及导出目录内实际生成文件的哈希，包含打包的 Mesh 和其他依赖文件。
 - `execution_status`：`completed` 或 `error`；`failure_domain` 记录发生问题的执行阶段，QA 检出缺陷为 `qa_findings`。
@@ -90,7 +90,7 @@ qa = run_artisan(python, bundle, mode="qa")
 
 ## 验证与限制
 
-历史开发验证见[清理前记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/ARTISAN_BACKEND.md)。当前分支已删除开发测试，保留后端状态协议与资产审核。Mac 上的代码检查不能证明实际 Artisan 导出或 Isaac 功能验证通过。
+历史开发验证见[清理前记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/ARTISAN_BACKEND.md)。当前分支已删除开发测试，保留后端状态协议与资产审核。Mac 上的代码检查不能证明实际 Artisan 导出或 Isaac 功能验证通过。
 
 输入绑定目前覆盖约定的工作目录文件，不是任意 Python 依赖发现器；未锁定整个 Artisan 安装树、第三方包版本或运行环境。导出文件哈希保证列入清单的文件未变化，不证明所有格式引用都有效、碰撞质量合格或仿真可执行。SDK 内部仍可能在导出时重新加载或编译模型，API 分开不等于 SDK 已彻底解耦。
 
@@ -98,7 +98,7 @@ qa = run_artisan(python, bundle, mode="qa")
 
 2026-11-09 更新：已开始统一前端描述，P0 实际实现和限制见
 [ASSEMBLY_BLUEPRINT.md](ASSEMBLY_BLUEPRINT.md)，运行记录见
-[P0 报告](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/reports/ASSEMBLY_BLUEPRINT_P0_20261109.md)。下文保留本次后端拆分完成时的建议；
+[P0 报告](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/reports/ASSEMBLY_BLUEPRINT_P0_20261109.md)。下文保留本次后端拆分完成时的建议；
 目前新增的描述层仍未替代全部 GeometryRecipe / AssemblyPlan 或机械功能验证。
 
 下一任务应从确定的装配描述输入开始，新增最小 IR 和现有 Blueprint / GeometryRecipe / AssemblyPlan 的适配器，明确零件定义与实例、单位与局部坐标系、接口及 Mate 引用、证据与假设。先用轴孔或螺栓台架做离线往返与错误引用测试，再连接实际后端；避免先增加 Agent 或直接扩展端到端视频流程。

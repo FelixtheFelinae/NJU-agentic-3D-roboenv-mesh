@@ -47,7 +47,7 @@ def author(scene: Path, image: Path, output: Path, camera_path: str, distance: f
         raise ValueError("background display distance must be inside camera clipping range")
     target = "/World/EnvCreatorBackground"
     if original.GetPrimAtPath(target):
-        raise ValueError("source already contains an EnvCreator background")
+        raise ValueError("source already contains an SceneCreator background")
     source_hash = hashlib.sha256(scene.read_bytes()).hexdigest()
     before = scene_signature(original)
     shutil.copyfile(image, output / "background.png")

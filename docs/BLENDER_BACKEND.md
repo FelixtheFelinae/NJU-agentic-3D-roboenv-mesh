@@ -102,7 +102,7 @@ PYTHONPATH=src /absolute/path/Artisan/.artisan/venv/bin/python \
 环绕视频展示静态场景外观，不是交互动作录制。
 没有运行 VLM 独立外观审查，不能以编译或物理通过声称与原视频精确一致。
 
-[历史检查记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/BLENDER_BACKEND.md)
+[历史检查记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/BLENDER_BACKEND.md)
 
 无 Blender 时跳过真实运行测试；本机已用上列安装版本执行实际测试。
 设计遵循本机 Artisan `sdk/_docs/base/50_blender_freeform.md` 的分工：

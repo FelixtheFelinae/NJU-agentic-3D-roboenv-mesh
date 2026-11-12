@@ -34,7 +34,7 @@ harness.workflow.Workflow
 
 Workflow 默认单目标，背景与物理均按配置选择。配置 `usd_python` 时，Workflow 会组装并打包候选场景。
 已知规格输入走 [直接 Isaac USD 路径](ISAAC_USD_WORKFLOW.md)。
-已有 `generate` 批处理路径可生成 `delivery.json`，随后使用 `envcreator handoff`。
+已有 `generate` 批处理路径可生成 `delivery.json`，随后使用 `scenecreator handoff`。
 组件 export 当前发布为 `unverified`，具体可用范围由绑定报告给出。
 
 ## 保留的资产能力
@@ -45,4 +45,4 @@ Workflow 默认单目标，背景与物理均按配置选择。配置 `usd_pytho
 - 原始证据、未知量、建模假设、失败记录和文件哈希。
 
 运行入口与配置见 [固定 Workflow](FIXED_RECONSTRUCTION_WORKFLOW.md)、
-[Studio](ENVCREATOR_STUDIO.md)、[场景交付](ENVCREATOR_CLAWSPINE.md)。
+[Studio](SCENECREATOR_STUDIO.md)、[场景交付](SCENECREATOR_CLAWSPINE.md)。

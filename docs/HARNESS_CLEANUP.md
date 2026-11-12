@@ -4,7 +4,7 @@
 
 ## 保留的调用链
 
-`envcreator workflow / studio` → 原生 DSH 或 CLI 决策 → `harness.workflow` → `components` → 感知、装配蓝图、几何构建与审核。
+`scenecreator workflow / studio` → 原生 DSH 或 CLI 决策 → `harness.workflow` → `components` → 感知、装配蓝图、几何构建与审核。
 
 结构前检、Critic、约束修订、资产物理验证、证据与哈希记录保留。Studio、Blender/Artisan 接口、可选背景重建、标准连接、工具资产生成与验证、场景依赖打包均为 Harness 的运行依赖。
 

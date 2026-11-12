@@ -1,4 +1,4 @@
-"""Perception and independently callable reconstruction stages for EnvCreator."""
+"""Perception and independently callable reconstruction stages for SceneCreator."""
 
 import argparse
 import importlib.util

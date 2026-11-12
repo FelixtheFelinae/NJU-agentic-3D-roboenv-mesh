@@ -363,7 +363,7 @@ function Configuration({ config }) {
           <dt>凭据</dt>
           <dd>独立 DSH 配置 · 后端保存</dd>
           <dt>VLM</dt>
-          <dd>仅由 EnvCreator 内部配置使用</dd>
+          <dd>仅由 SceneCreator 内部配置使用</dd>
         </dl>
         <div className="ec-note">
           沿用 DSH 原生模型设置；部署由 Studio TOML 与独立模型文件配置。
@@ -632,7 +632,7 @@ function createWorkbench(ctx) {
           </span>
           <div>
             <div className="ec-brand">
-              EnvCreator <span className="ec-tag">STUDIO</span>
+              SceneCreator <span className="ec-tag">STUDIO</span>
             </div>
             <div className="ec-breadcrumb">资产生成 / 原生 DSH 工作台</div>
           </div>
@@ -1175,7 +1175,7 @@ export function apply(ctx) {
   const Workbench = createWorkbench(ctx);
   const Button = () => (
     <button
-      title="打开 EnvCreator 工作台"
+      title="打开 SceneCreator 工作台"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -1191,7 +1191,7 @@ export function apply(ctx) {
       onClick={() => ctx.sidebarRight.openTab(KIND)}
     >
       <Layers3 size={14} />
-      EnvCreator
+      SceneCreator
     </button>
   );
   ctx.effect(() => {
@@ -1200,12 +1200,12 @@ export function apply(ctx) {
       ctx.sidebarRightTabs.register({
         id: TAB,
         kind: KIND,
-        title: () => "EnvCreator Studio",
+        title: () => "SceneCreator Studio",
         guide: [
           {
             id: KIND,
             order: 10,
-            title: () => "EnvCreator Studio",
+            title: () => "SceneCreator Studio",
             description: () => "资产、渲染、证据与实时负载",
             icon: () => <Layers3 size={20} />,
           },
@@ -1242,7 +1242,7 @@ export function apply(ctx) {
             name: "conversation.view",
             id: "envcreator.workbench",
             order: 15,
-            label: "EnvCreator",
+            label: "SceneCreator",
             registrant: "@envcreator/studio",
           },
           Workbench,
@@ -1255,13 +1255,13 @@ export function apply(ctx) {
           {
             name: "settings.plugins.tab",
             id: "envcreator",
-            label: "EnvCreator",
+            label: "SceneCreator",
             order: 35,
             registrant: "@envcreator/studio",
           },
           () => (
             <div style={{ padding: 16, fontSize: 13 }}>
-              EnvCreator 使用 Studio TOML 与 DSH
+              SceneCreator 使用 Studio TOML 与 DSH
               原生模型设置。产物、调用和资源在工作台中查看。
             </div>
           ),
@@ -1304,5 +1304,5 @@ export function apply(ctx) {
       clearTimeout(timer);
       for (const dispose of cleanup.reverse()) dispose();
     };
-  }, "EnvCreator native workbench views");
+  }, "SceneCreator native workbench views");
 }

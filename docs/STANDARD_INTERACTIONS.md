@@ -68,4 +68,4 @@ python -m roboenv_perception.standard_interactions.validation \
 
 本轮没有修改原验收阈值，没有重跑长时 Isaac 台架，也没有修改已有物理失败。固定底座启动残差超限、释放瞬间与释放后回落的同步证据仍待处理。台架滑台、理想腕部固定、磁吸和等效预载不构成机器人真实抓持、左手稳定或真机接触验证。
 
-历史迁移比较与开发检查见[清理前记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/STANDARD_INTERACTIONS.md)。
+历史迁移比较与开发检查见[清理前记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/STANDARD_INTERACTIONS.md)。

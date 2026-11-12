@@ -52,7 +52,7 @@ def main(argv=None):
                                                        args.display_distance, args.hide_floor_visual)
             write_json(args.output / "result.json", report)
     except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as error:
-        parser.exit(2, f"EnvCreator background: {error}\n")
+        parser.exit(2, f"SceneCreator background: {error}\n")
     print(json.dumps({"status": report["status"], "result": str((args.output / "result.json").resolve()),
                       "image": str((args.output / "generation/background.png").resolve()),
                       "scene": report.get("display", {}).get("scene_usd")}, ensure_ascii=False, indent=2))

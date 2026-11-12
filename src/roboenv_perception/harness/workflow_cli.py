@@ -12,11 +12,11 @@ from .workflow import Options, Workflow
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="envcreator workflow", description=__doc__)
+    parser = argparse.ArgumentParser(prog="scenecreator workflow", description=__doc__)
     commands = parser.add_subparsers(dest="action", required=True)
     start = commands.add_parser("start")
     start.add_argument("--output", type=Path, required=True)
-    start.add_argument("--config", type=Path, required=True, help="EnvCreator Studio settings TOML")
+    start.add_argument("--config", type=Path, required=True, help="SceneCreator Studio settings TOML")
     start.add_argument("--task", required=True)
     media = start.add_mutually_exclusive_group(required=True)
     media.add_argument("--video", type=Path)
@@ -62,4 +62,4 @@ def main(argv=None):
         print(json.dumps({**result, "snapshot": str(output / "workflow.json")}, ensure_ascii=False, indent=2))
         return 0
     except (ValueError, OSError, RuntimeError) as exc:
-        parser.exit(2, f"EnvCreator: {exc}\n")
+        parser.exit(2, f"SceneCreator: {exc}\n")

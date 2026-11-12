@@ -1,6 +1,6 @@
 # ClawSpine 原生电动螺丝刀接口
 
-EnvCreator 提供工具资产和简化连接模型；ClawSpine 的原生 DSH 负责观测、生成 Low Reflex、执行 G1 动作及记录会话。没有新增外层模型控制循环。
+SceneCreator 提供工具资产和简化连接模型；ClawSpine 的原生 DSH 负责观测、生成 Low Reflex、执行 G1 动作及记录会话。没有新增外层模型控制循环。
 
 ## 代码调用关系
 
@@ -48,7 +48,7 @@ G1 右腕通过固定关节安装螺丝刀，保留负载传递，不是手指�
 
 ## 重新打开与本次会话
 
-本机入口仍为 `outputs/g1-wrist-screwdriver-20261028/desktop/start.sh astra`，已指向包含螺丝力学的新场景包；启动后打开认证页面。模型使用独立的 DSH 配置，不使用 EnvCreator 的 VLM 凭据。
+本机入口仍为 `outputs/g1-wrist-screwdriver-20261028/desktop/start.sh astra`，已指向包含螺丝力学的新场景包；启动后打开认证页面。模型使用独立的 DSH 配置，不使用 SceneCreator 的 VLM 凭据。
 
 修订后的原生会话为 `617763fc-af1b-4ee2-beda-bf28c7b7df93`，证据目录 `outputs/g1-wrist-screwdriver-20261028/native-ui-20261028-203618-724287/`。已提交“右腕固定螺丝刀对准、反转、拧松并取下，最后停止电机”的任务。实际模型为 `gpt-6-astra`，原生日志已记录工具状态读取成功，以及后续全身状态读取。机器人任务尚未宣称成功。
 

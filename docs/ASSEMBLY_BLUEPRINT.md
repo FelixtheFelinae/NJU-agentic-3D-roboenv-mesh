@@ -2,7 +2,7 @@
 
 新版结构描述使用 `envcreator.assembly-blueprint/1`，实现位于
 `src/roboenv_perception/construction/assembly_blueprint.py`。它替代新生成任务中的旧
-EnvCreator Blueprint 作者输出，不删除历史文件，也不修改外部 Artisan 源码。
+SceneCreator Blueprint 作者输出，不删除历史文件，也不修改外部 Artisan 源码。
 这是 Mechanical Assembly IR 的最小描述层，尚不是完整的 CAD/物理编译 IR。
 
 ## 实际入口与流程
@@ -22,7 +22,7 @@ flowchart LR
 
 `blueprint` 操作继续由 DSH 插件调用；请求仍使用已绑定的 `evidence`、`scope` 版本和
 `object_id`，可提供 `previous` 及 `params.feedback` 修订。它没有新增整体任务聊天循环。
-内部 VLM 继续使用 EnvCreator 的独立配置，未把 VLM 凭据用于 DSH。
+内部 VLM 继续使用 SceneCreator 的独立配置，未把 VLM 凭据用于 DSH。
 
 - `components/operations.py`：Intake → 新版作者输出 → 来源检查 → 自检查。
   Intake 身份/引用校验失败时，按既有 `design.max_revisions` 有限重试；每次保留拒绝原因。

@@ -1,4 +1,4 @@
-/** EnvCreator tools for native DSH. No chat loop, robot controller or shell tool. */
+/** SceneCreator tools for native DSH. No chat loop, robot controller or shell tool. */
 import { spawn } from 'node:child_process';
 import { randomUUID, createHash } from 'node:crypto';
 import { readFile, mkdir, appendFile, writeFile } from 'node:fs/promises';
@@ -50,9 +50,9 @@ export async function invokeBackend(config, operation, directory, signal) {
         const result = await readFile(join(directory, 'result.json'), 'utf8').then(JSON.parse).catch(() => null);
         await mkdir(directory, { recursive: true });
         await writeFile(join(directory, 'worker.json'), JSON.stringify({ code, signal: exitSignal, cancelled, stderr }, null, 2));
-        if (cancelled) throw new Error('EnvCreator operation cancelled; partial evidence retained');
-        if (!result) throw new Error(`EnvCreator ${operation} exited ${code}; see ${directory}`);
-        if (code !== 0 && !['unverified', 'failed'].includes(result.status)) throw new Error(`EnvCreator ${operation} has a result but exited ${code}; see ${directory}`);
+        if (cancelled) throw new Error('SceneCreator operation cancelled; partial evidence retained');
+        if (!result) throw new Error(`SceneCreator ${operation} exited ${code}; see ${directory}`);
+        if (code !== 0 && !['unverified', 'failed'].includes(result.status)) throw new Error(`SceneCreator ${operation} has a result but exited ${code}; see ${directory}`);
         done({ ...result, worker_exit_code: code, evidence_directory: directory });
       } catch (error) { reject(error); }
     });

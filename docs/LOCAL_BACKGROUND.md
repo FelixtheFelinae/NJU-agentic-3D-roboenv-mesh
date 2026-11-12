@@ -5,14 +5,14 @@
 ## 入口和调用关系
 
 ```text
-envcreator background
+scenecreator background
   ├─ construction/background_cli.py：已有素材的独立入口
   ├─ background_generation.py：参考图、背景 mask、画布和来源记录
   ├─ background_generation_worker.py：本地 SD1.5 Inpainting，单独进程退出释放显存
   └─ 可选 background_scene.py → background_scene_worker.py
       └─ 在原 USD 上叠加固定相机背景板，不修改原资产与物理属性
 
-envcreator generate --background-generation-config <toml>
+scenecreator generate --background-generation-config <toml>
   └─ harness/run.py:_background → 同一生成实现
       └─ 背景图单独交付，不自动选择相机或替换物理场景
 ```
@@ -29,14 +29,14 @@ uv pip install --python .venv/bin/python -e '.[background-generation]'
   --output /absolute/model-storage/sd15-inpainting
 ```
 
-下载入口固定公开模型 `stable-diffusion-v1-5/stable-diffusion-inpainting` 的 revision `8a4288a76071f7280aedbdb3253bdb9e9d5d84bb`，只获取半精度 safetensors、配置、tokenizer 和模型卡。匿名下载，不读取 Hugging Face、EnvCreator 或 DSH 密钥；写出文件哈希，LFS 文件还与上游声明的 SHA-256 比对。模型权重不放入 Git。
+下载入口固定公开模型 `stable-diffusion-v1-5/stable-diffusion-inpainting` 的 revision `8a4288a76071f7280aedbdb3253bdb9e9d5d84bb`，只获取半精度 safetensors、配置、tokenizer 和模型卡。匿名下载，不读取 Hugging Face、SceneCreator 或 DSH 密钥；写出文件哈希，LFS 文件还与上游声明的 SHA-256 比对。模型权重不放入 Git。
 
 复制 `configs/background-generation.example.toml` 为本地配置，填写 `model_path`。默认 768×512、单张、30 步、半精度；可打开 `cpu_offload` 降低显存占用，代价是速度。真实峰值和质量以逐次记录为准。
 
 ## 使用已有背景包
 
 ```bash
-.venv/bin/envcreator background \
+.venv/bin/scenecreator background \
   --config configs/local-background-generation.toml \
   --prepared-background /absolute/path/to/prepared-background \
   --frame-id frame-000000 \
@@ -48,7 +48,7 @@ uv pip install --python .venv/bin/python -e '.[background-generation]'
 也可提供单张真实图片和经过复核的背景 mask：
 
 ```bash
-.venv/bin/envcreator background \
+.venv/bin/scenecreator background \
   --config configs/local-background-generation.toml \
   --image /absolute/path/to/frame.png \
   --observed-mask /absolute/path/to/observed.png \

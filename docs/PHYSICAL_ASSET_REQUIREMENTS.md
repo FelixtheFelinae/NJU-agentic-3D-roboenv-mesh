@@ -1,12 +1,12 @@
-# EnvCreator：用于机器人操作的物理资产要求
+# SceneCreator：用于机器人操作的物理资产要求
 
 本约定补充现有生成、装配语义与工具验证流程。对象按任务需要提供交互能力；装饰背景不要求承受操作。本文是生成与交付要求，不表示所有条款已有自动检查器。
 
 ## 生成入口与证据
 
-`harness/run.py` 组织感知、范围、资料、蓝图、几何、验证与交付。`construction/design.py` 记录零件及连接假设；`harness/geometry.py` 和受信任 Blender worker 生成几何，Artisan 导出通用刚体资产。特定工具通过注册实现构建与验证，目前公开工具入口为 `envcreator tool` / `envcreator tool-test`。
+`harness/run.py` 组织感知、范围、资料、蓝图、几何、验证与交付。`construction/design.py` 记录零件及连接假设；`harness/geometry.py` 和受信任 Blender worker 生成几何，Artisan 导出通用刚体资产。特定工具通过注册实现构建与验证，目前公开工具入口为 `scenecreator tool` / `scenecreator tool-test`。
 
-明确文本设计可直接使用带来源标注的参数化生成器，不必伪造图像感知或 VLM 调用。三角盒试验的 `tools/triangular_box.py` 复用 EnvCreator 的 Blender backend，直接装配 USD；该实验入口尚未注册到通用 CLI，也没有经过 Artisan 导出。
+明确文本设计可直接使用带来源标注的参数化生成器，不必伪造图像感知或 VLM 调用。三角盒试验的 `tools/triangular_box.py` 复用 SceneCreator 的 Blender backend，直接装配 USD；该实验入口尚未注册到通用 CLI，也没有经过 Artisan 导出。
 
 每个交付版本保存原始要求、来源、假设与未知项、参数及单位、代码/资产哈希、模拟器版本、验证协议、前后状态和失败修订。工程推测不标成实测，引用的拧紧力矩不标成松脱力矩。运行中的已识别版本不更改；修改后另建版本。
 

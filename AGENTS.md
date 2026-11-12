@@ -14,13 +14,13 @@
 - 工具生成同时执行资料收集和可执行的功能验证，保留来源、建模假设、资产哈希、验证协议及失败修订。
 - 功能验证应包含正常操作和不应生效的对照；不能只以外形、编译成功或电机空转判断工具可用。
 - 区分理想工具台架、机器人持工具、真实抓持及真实接触；理想连接或固定夹持必须明确记录。
-- 当前电动螺丝刀入口为 `envcreator tool` / `envcreator tool-test`；其他工具需注册对应的生成与验证实现后才能宣称具备该能力。
-- Agentic 工具流程沿用 ClawSpine 的原生 DSH 会话、历史与插件执行。EnvCreator 作为相关插件提供资料、生成、验证和交付接口，保留前后状态及调用 ID；不另建模型聊天循环或由外层代替机器人执行动作。
+- 当前电动螺丝刀入口为 `scenecreator tool` / `scenecreator tool-test`；其他工具需注册对应的生成与验证实现后才能宣称具备该能力。
+- Agentic 工具流程沿用 ClawSpine 的原生 DSH 会话、历史与插件执行。SceneCreator 作为相关插件提供资料、生成、验证和交付接口，保留前后状态及调用 ID；不另建模型聊天循环或由外层代替机器人执行动作。
 
 # 模型与凭据
 
-- Qwen 及 `VLM_API_KEY` 只用于 EnvCreator 内部的 VLM 环节。ClawSpine 可通过 EnvCreator 插件间接触发该环节，不直接把 Qwen 用作 DSH 任务推理、机器人控制或独立机器人视觉后端。
-- ClawSpine 的任务推理模型与 EnvCreator 的 VLM 分开配置，不自动复用 `VLM_API_KEY`，也不静默回退到 Qwen。
+- Qwen 及 `VLM_API_KEY` 只用于 SceneCreator 内部的 VLM 环节。ClawSpine 可通过 SceneCreator 插件间接触发该环节，不直接把 Qwen 用作 DSH 任务推理、机器人控制或独立机器人视觉后端。
+- ClawSpine 的任务推理模型与 SceneCreator 的 VLM 分开配置，不自动复用 `VLM_API_KEY`，也不静默回退到 Qwen。
 - 用户计划为 DSH 提供中转的 6.1-sol；准确模型 ID、地址、接口协议和独立凭据待接入。接入前不继续用原 VLM 凭据发起 DSH 模型请求，历史 Qwen 实验保留原始标注。
 
 # GitHub 提交范围

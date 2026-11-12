@@ -1,4 +1,4 @@
-"""Durable, single-target EnvCreator workflow. The caller owns the task-model session."""
+"""Durable, single-target SceneCreator workflow. The caller owns the task-model session."""
 
 import fcntl
 import hashlib

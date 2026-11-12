@@ -216,7 +216,7 @@ class Jobs:
                 "call_id": call_id,
                 "parent_run_id": parent_id,
                 "inputs": [{k: row[k] for k in ("id", "name", "sha256")} for row in media],
-                "observation": "EnvCreator configured observations; inspect per-stage evidence",
+                "observation": "SceneCreator configured observations; inspect per-stage evidence",
                 "operation": operation,
                 "sources": sources,
                 "origin": origin,

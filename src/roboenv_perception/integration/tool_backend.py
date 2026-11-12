@@ -1,4 +1,4 @@
-"""Fixed EnvCreator operations behind a native DSH plugin, without a model loop."""
+"""Fixed SceneCreator operations behind a native DSH plugin, without a model loop."""
 
 import argparse
 import json
@@ -78,7 +78,7 @@ def prepare_profile(output: Path, asset: Path, validation: Path | None, *, pytho
 
 def execute_operation(operation: str, config: dict, output: Path) -> dict:
     if operation not in OPERATIONS:
-        raise ValueError("unknown EnvCreator operation")
+        raise ValueError("unknown SceneCreator operation")
     asset = Path(config["asset"])
     state_path = Path(config["output_root"]) / "state.json"
     state = read_json(state_path) if state_path.exists() else {}

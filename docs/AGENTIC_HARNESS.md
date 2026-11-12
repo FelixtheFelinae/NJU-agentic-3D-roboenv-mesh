@@ -4,8 +4,8 @@
 
 用于机器人操作的资产还需遵守 [物理资产要求](PHYSICAL_ASSET_REQUIREMENTS.md)：接触承压、双向反力、连接解除与功能对照均需证据；文档要求不等于已实现的自动验证。
 
-框架暂定名为 **EnvCreator**。`envcreator generate` 复用本文的生成入口；场景交付与
-ClawSpine 原生机器人运行的连接见 [EnvCreator × ClawSpine](ENVCREATOR_CLAWSPINE.md)。
+框架名为 **SceneCreator**。`scenecreator generate` 复用本文的生成入口；场景交付与
+ClawSpine 原生机器人运行的连接见 [SceneCreator × ClawSpine](SCENECREATOR_CLAWSPINE.md)。
 
 记录日期：2026-10-27。入口是 `src/roboenv_perception/harness/cli.py` 的 `scene-harness`
 （或 `python -m roboenv_perception.harness.cli`）。给一段明确物体与交互的任务描述，
@@ -115,6 +115,6 @@ Blender 和 Isaac 各自使用配置指定的本机环境；公开网页搜索�
 
 ## 已有实验与限制
 
-完整视频回放、真实图片与视频、物理协议回归及失败案例见 [2026-10-27 运行记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/history/HARNESS_RUNS_20261027.md)。这些记录包含视觉误拒和误放行；当前模型复核仍不可靠，不能宣称稳定自动重建成功。
+完整视频回放、真实图片与视频、物理协议回归及失败案例见 [2026-10-27 运行记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/history/HARNESS_RUNS_20261027.md)。这些记录包含视觉误拒和误放行；当前模型复核仍不可靠，不能宣称稳定自动重建成功。
 
 同一份代码和输入的恢复会复用已有阶段，不是重新运行模型或独立复现实验。调整本仓库源码后，旧运行会因指纹变化拒绝恢复，需使用新输出目录；历史产物仍保留。

@@ -1,1 +1,1 @@
-"""Local EnvCreator workbench: UI, provenance, jobs and host telemetry."""
+"""Local SceneCreator workbench: UI, provenance, jobs and host telemetry."""

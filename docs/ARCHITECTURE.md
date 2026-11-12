@@ -4,7 +4,7 @@
 
 ## 主入口
 
-`envcreator` → `integration/cli.py`：
+`scenecreator` → `integration/cli.py`：
 
 - `workflow` → `harness/workflow_cli.py` → `Workflow` → `components.operations.run`。
 - `studio` → `workbench/cli.py` → 原生 DSH 与 `integrations/studio/host.mjs`。

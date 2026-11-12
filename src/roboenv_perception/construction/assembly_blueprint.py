@@ -641,7 +641,7 @@ def main(argv=None):
     value = read_json(args.input)
     if args.source_format == "envcreator":
         if not args.intake:
-            parser.error("EnvCreator migration needs --intake")
+            parser.error("SceneCreator migration needs --intake")
         bp = migrate_envcreator(value, read_json(args.intake))
     elif args.source_format == "artisan":
         if not args.object_id:

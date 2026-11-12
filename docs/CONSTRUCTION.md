@@ -60,7 +60,7 @@ reference board。按可见面积、纹理清晰度代理和时间间隔选择�
 
 ## C：背景、桌面与 3DGS
 
-桌面资产的米制任务布局、USD 导出与 Isaac Lab 接触验证见 [ISAAC_TABLE](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/ISAAC_TABLE.md)。
+桌面资产的米制任务布局、USD 导出与 Isaac Lab 接触验证见 [ISAAC_TABLE](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/ISAAC_TABLE.md)。
 
 背景准备保留 RGB 原图，只输出监督 mask；独立 mesh、待解决设计、临时对象、未知区域
 和人工排除不进入真实背景监督。边缘可膨胀，阴影和反射须人工检查。`--exclusions`
@@ -128,7 +128,7 @@ Linux 合成夹具测试覆盖证据完整性、未知/前景排除、刚体零�
 
 ## 配置检查与可运行示例（2026-10-22）
 
-[历史检查记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/CONSTRUCTION.md)
+[历史检查记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/CONSTRUCTION.md)
 
 合成示例不执行真实模型、相机恢复或 3DGS 训练。检查命令不发送网络请求，
 不输出 header 内容或环境变量值；检查通过仍不保证第三方二进制实际兼容。

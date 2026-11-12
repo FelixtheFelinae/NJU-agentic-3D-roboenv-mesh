@@ -11,7 +11,7 @@ if (JSON.parse(readFileSync(join(cliRoot, 'package.json'))).version !== '0.2.1-a
 const cli = realpathSync(join(cliRoot, 'lib/bin.js'));
 const profile = 'envcreator-studio';
 const env = { ...process.env, DSH_HOME: join(binding.stateRoot, 'dsh-home') };
-// Deliberately do not forward EnvCreator VLM credentials to the task model.
+// Deliberately do not forward SceneCreator VLM credentials to the task model.
 delete env.VLM_API_KEY;
 const log = createWriteStream(join(binding.stateRoot, 'dsh-private.log'), { flags: 'a', mode: 0o600 });
 let child, stopping = false;
@@ -76,7 +76,7 @@ try {
     await nativeRpc(connection, 'session/selectModel', { args: { request: { sessionId, provider: binding.model.provider, model: binding.model.model } } }, AbortSignal.timeout(15000));
   }
   writeFileSync(join(binding.stateRoot, 'ready.json'), JSON.stringify({ web_url: launchUrl, session_id: sessionId, ready_at: new Date().toISOString(), robot_execution: 'not_run' }), { mode: 0o600 });
-  console.log('EnvCreator Studio ready: ' + launchUrl);
+  console.log('SceneCreator Studio ready: ' + launchUrl);
   console.log('Native DSH session: ' + sessionId + ' | robot/simulator launch: none');
   if (binding.open) spawn('xdg-open', [launchUrl], { stdio: 'ignore' }).on('error', () => {});
 } catch (error) { stop(); throw error; }

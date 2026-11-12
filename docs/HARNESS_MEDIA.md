@@ -41,6 +41,6 @@ SAM3 或配置的 Grounding DINO + SAM2.1 负责可见 mask。多图片输入逐
 
 离线检查：
 
-[历史检查记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/HARNESS_MEDIA.md)
+[历史检查记录](https://github.com/FelixtheFelinae/SceneCreator/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/HARNESS_MEDIA.md)
 
 历史检查仅验证文件契约、保守关联与来源校验。当前分支已移除合成回放后端；真实 VLM、SAM 与跨视角识别质量仍需实际运行核实。

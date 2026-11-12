@@ -12,7 +12,7 @@ from ..video_io import require_av
 
 
 class Sampling(VideoConfig):
-    # The decision cannot change replay paths or preview encoding.
+    # The decision cannot change preview encoding.
     sample_fps: float = Field(gt=0, le=30, allow_inf_nan=False)
     max_frames: int = Field(ge=1, le=64)
     start_seconds: float = Field(default=0, ge=0, allow_inf_nan=False)

@@ -8,7 +8,7 @@ import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
-from ..construction.asset_agents import child_environment
+from ..construction.artisan_backend import child_environment
 from ..io import read_json, sha256, write_json
 from ..tools.electric_screwdriver import REFERENCE_URL, build_tool
 from .web import ObjectIdentity, WebEvidenceClient, WebSearchPolicy

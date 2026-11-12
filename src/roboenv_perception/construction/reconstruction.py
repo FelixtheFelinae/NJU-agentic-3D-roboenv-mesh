@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image
 
 from ..io import read_json, relative_file, sha256, write_json
-from .asset_agents import child_environment
+from .artisan_backend import child_environment
 from .common import cv2_module, new_run, read_mask, source_identity, verify_run
 from .contracts import VERSION, BackgroundConfig
 

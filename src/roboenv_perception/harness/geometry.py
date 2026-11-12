@@ -191,7 +191,7 @@ class GeometryRecipe(Contract):
                 raise ValueError(f"unknown recipe evidence ref: {item.evidence_refs}")
         if set(self.part_masses_kg) != parts:
             raise ValueError("each part needs a mass assumption")
-        if any(not math.isfinite(v) or not 0.001 <= v <= 1000 for v in self.part_masses_kg.values()):
+        if any(not math.isfinite(v) or not 0 < v <= 1000 for v in self.part_masses_kg.values()):
             raise ValueError("part masses must be finite and positive")
         for joint in self.joint_placements:
             if not all(math.isfinite(v) for v in joint.origin_parent_m):
@@ -431,15 +431,25 @@ def _preview_offsets(blueprint: Blueprint, recipe: GeometryRecipe) -> dict[str, 
     return result
 
 
-@traced("Blender + Artisan")
+@traced("Blender asset build")
 def build_recipe(blueprint: Blueprint, recipe: GeometryRecipe, output: Path, *,
-                 artisan_python: Path, blender: Path | None = None,
+                 artisan_python: Path | None = None, blender: Path | None = None,
+                 usd_python: Path | None = None,
                  timeout_seconds: int = 600, compiled_assembly: dict | None = None,
                  component_root: Path | None = None) -> dict:
     """Build one candidate in a fresh directory; exported USD is not physics verified."""
     from .geometric_verifier import persist_verification
 
+    frozen_standard = bool(compiled_assembly or (recipe.assembly and any(
+        connection.standard_ref for connection in recipe.assembly.connections
+    )))
+    direct = usd_python is not None and not frozen_standard
+    if not direct and artisan_python is None:
+        raise ValueError("legacy build or frozen v9 assembly requires artisan_python")
     if isinstance(blueprint, AssemblyBlueprint):
+        from ..construction.part_rules import compile_mates
+
+        compile_mates(blueprint)
         legacy_projection(blueprint)  # Refuse unsupported graphs/units; retain the full document below.
         if any(j.travel.value is None for j in blueprint.joints if j.type in {"revolute", "prismatic"}):
             raise ValueError("assembly build needs explicit assumed or estimated travel; no silent default")
@@ -448,9 +458,19 @@ def build_recipe(blueprint: Blueprint, recipe: GeometryRecipe, output: Path, *,
     write_json(output / "blueprint.json", blueprint.model_dump(mode="json"))
     write_json(output / "recipe.json", recipe.model_dump(mode="json"))
     worker = Path(__file__).with_name("blender_recipe.py")
-    parameters = {**recipe.model_dump(mode="json"), "preview_offsets": _preview_offsets(blueprint, recipe)}
+    positions = _preview_offsets(blueprint, recipe)
+    parameters = {**recipe.model_dump(mode="json"), "preview_offsets": positions,
+                  "explicit_collision": direct}
     built = build_blender_meshes(worker, output / "visual", parameters=parameters,
                                 blender=blender, timeout=timeout_seconds)
+    if direct:
+        from .direct_usd import author_usd, recipe_joints
+
+        return author_usd(output, usd_python, recipe, built, positions,
+                          joints=recipe_joints(blueprint, recipe),
+                          couplings=[{"driver_joint": c.driver_joint, "driven_joint": c.driven_joint,
+                                      "ratio": c.ratio.value} for c in blueprint.couplings],
+                          timeout_seconds=timeout_seconds)
     inputs = output / "inputs"
     inputs.mkdir()
     for mesh in built["meshes"]:
@@ -509,6 +529,7 @@ def build_recipe(blueprint: Blueprint, recipe: GeometryRecipe, output: Path, *,
         standard_installation = read_json(output / "standard/installation.json")
         usd_path = Path(standard_installation["usd"])
     result = {"status": "compiled", "usd": str(usd_path.resolve()), "usd_sha256": sha256(usd_path),
+              "model_ref": str((output / "model.py").resolve()),
               "model_sha256": sha256(output / "model.py"), "recipe_sha256": sha256(output / "recipe.json"),
               "visual_previews": [str((output / "visual" / p).resolve()) for p in built["previews"]],
               "physics_status": "not_run", "part_mass_source": "assumed_from_agent_recipe_not_measured"}

@@ -379,106 +379,6 @@ def background_view(rolemap):
     return result
 
 
-def reference_projection(result, run, root):
-    """Show newly rebuilt case artifacts, with assisted evidence clearly attributed."""
-    data = read_json(root / "observation.json", {}) or {}
-    spec = data.get("assets", {}).get("asset-0002", {}).get("build_spec", {})
-    if not spec:
-        return
-    if data.get('evidence_policy') == 'video_only':
-        fit = data.get('relative_fit', {})
-        def sizes(values):
-            return {axis: {'value': value, 'source': 'estimated', 'unit': 'relative_width'}
-                    for axis, value in zip('xy', values)}
-        result['structure'] = {
-            'run_id': run['id'], 'object_id': 'asset-0002', 'kind': '视频相对结构',
-            'parts': [{'id': 'base', 'parent': None, 'name': '机身底座', 'role': '视频拟合比例',
-                       'dimensions': sizes((1, fit.get('depth')))},
-                      {'id': 'lid', 'parent': 'base', 'name': '屏幕', 'role': '视频拟合比例',
-                       'dimensions': sizes((1, fit.get('lid_length')))}],
-            'joints': [{'id': 'lid_hinge', 'parent': 'base', 'child': 'lid', 'kind': '相对开合',
-                        'axis': [1, 0, 0], 'origin': '视频矩形面板拟合'}],
-            'dimensions': {}, 'couplings': [], 'assumption_count': 4, 'unresolved_count': 4,
-            'message': '仅用视频恢复比例，机身宽度=1；厘米尺寸未知。厚度、质量、摩擦未由视频恢复。',
-            'artifact': reference(run, root/'fit/relative-fit.json'),
-        }
-        renders = [reference(run, p) for p in (root/'renders').glob('*.png')]
-        candidate = root/'objects/asset-0002/export/object.usd'
-        result['model'] = {'run_id': run['id'], 'meshes': [], 'renders': renders,
-                           'asset': reference(run, candidate) if candidate.exists() else None,
-                           'partial': not bool(renders), 'stale': False,
-                           'message': '原视频照片投影 + 本轮新模型；下载资产为宽度归一化示意，不能作为真实米制物理资产。'}
-        result['validation'] = {'run_id': run['id'], 'status': '相对外观与几何实验', 'cases': [],
-                                'condition': '绝对尺度不可确定；未验证质量、接触或铰链悬停。历史人工视频角点和视频相机/分割复用。',
-                                'media': [], 'stale': False, 'artifact': reference(run, root/'observation.json')}
-        result['delivery'] = {'run_id': run['id'], 'stale': False,
-                              'files': [reference(run, candidate)] if candidate.exists() else []}
-        if data.get('latest', {}).get('error'):
-            result['decisions'].append({'kind': 'failure', 'title': '视频重建步骤未通过',
-                                        'message': '具体失败已保留，请查看当前验证详情。', 'run_id': run['id']})
-        return
-    joint = spec["joint"]
-    def quantity(value):
-        return {"value": value, "source": "estimated"}
-
-    def dimensions(values):
-        return {axis: quantity(value) for axis, value in zip("xyz", values)}
-    result["structure"] = {
-        "run_id": run["id"], "object_id": "asset-0002", "kind": "可动结构",
-        "parts": [
-            {"id": "base", "parent": None, "name": "机身底座", "role": "独立刚体",
-             "dimensions": dimensions((spec["width_m"], spec["depth_m"], spec["base_thickness_m"])), "evidence": spec["evidence_refs"]},
-            {"id": "lid", "parent": "base", "name": "屏幕", "role": "被动开合",
-             "dimensions": dimensions((spec["width_m"], spec["lid_length_m"], spec["lid_thickness_m"])), "evidence": spec["evidence_refs"]},
-        ],
-        "joints": [{"id": joint["name"], "parent": "base", "child": "lid", "kind": "被动转动",
-                    "type": "revolute", "axis": joint["axis"], "travel": quantity(joint["upper"]-joint["lower"]),
-                    "origin": "假设", "evidence": spec["evidence_refs"]}],
-        "dimensions": {}, "couplings": [], "assumption_count": 4, "unresolved_count": 1,
-        "message": "复用同一视频的历史人工角点与型号先验，重新拟合并构建；不是新自动识别或实测。",
-        "artifact": reference(run, root / "objects/asset-0002/blueprint.json") or reference(run, root / "objects/asset-0002/build-spec.json"),
-    }
-    renders = [reference(run, root / name) for name in (
-        "simulation/asset-laptop.png", "simulation/frame-initial.png", "simulation/frame-final.png"
-    ) if (root / name).is_file()]
-    asset_path = root / "simulation/assets/Laptop/object.usd"
-    result["model"] = {
-        "run_id": run["id"], "meshes": [], "renders": renders,
-        "asset": reference(run, asset_path) if asset_path.is_file() else None,
-        "partial": not asset_path.is_file(), "stale": False,
-        "message": "本轮新构建模型与真实照片投影；接触、重载及不同开角验证分别记录。"
-        if renders else "正在按冻结蓝图生成新候选；尚无本轮渲染。",
-    }
-    tests = []
-    for name, title in [("simulation", "场景接触与外力矩"), ("scene-reload", "新进程独立重载"),
-                        ("hinge-primary", "铰链保持与限位"), ("hinge-followup", "小开角与释放复查")]:
-        report = data.get(name, {})
-        if report:
-            tests.append({"name": title, "status": word(report.get("status", "not_run")), "tests": []})
-    failed = any(data.get(name, {}).get("status") == "failed" for name in (
-        "simulation", "scene-reload", "hinge-primary", "hinge-followup"
-    ))
-    result["validation"] = {
-        "run_id": run["id"], "status": "部分条件未通过" if failed else "请查看各项条件",
-        "condition": "同视频历史人工观测辅助；尺寸与物理参数有先验。实际 USD 仿真，无机器人操作；不代表全角度悬停。",
-        "cases": tests, "stale": False,
-        "media": [reference(run, root / "simulation/interaction-preview.mp4")]
-        if (root / "simulation/interaction-preview.mp4").exists() else [],
-        "artifact": reference(run, root / "observation.json"),
-    }
-    latest = data.get("latest", {})
-    if any(row.get("review") == "REDO" for row in data.get("assets", {}).values()):
-        result["decisions"].append({"kind": "failure", "title": "独立审核要求修订",
-                                    "message": "当前对象尚未通过完整审核；外观与已通过的测试保留，小开角等失败不能被旧场景通过结论覆盖。",
-                                    "run_id": run["id"]})
-    if latest.get("error"):
-        result["decisions"].append({"kind": "failure", "title": "本次步骤仍有阻塞",
-                                    "message": "新候选与失败证据已保存，具体问题见技术详情。", "run_id": run["id"]})
-    if asset_path.is_file():
-        result["delivery"] = {"run_id": run["id"], "stale": False,
-                              "files": [reference(run, asset_path), reference(run, root / "simulation/scene.usda")]}
-
-
 def workspace(store, task_id, identity=None, object_id=None):
     task = store.task(task_id)
     if identity is None:
@@ -736,6 +636,4 @@ def workspace(store, task_id, identity=None, object_id=None):
                 and (r := reference(row, p))
             ][:30],
         }
-    if "reference" in rolemap:
-        reference_projection(result, *rolemap["reference"])
     return result

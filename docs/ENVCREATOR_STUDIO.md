@@ -134,14 +134,10 @@ SSE 支持按事件字节偏移续读，浏览器另有低频刷新兜底。浏�
 
 ## 验证入口
 
-```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest -q tests/test_components.py tests/test_studio.py tests/test_dsh_model.py
-node --test tests/test_studio_native.mjs integrations/studio/test/client.test.mjs
-.venv/bin/ruff check src/roboenv_perception/components src/roboenv_perception/workbench src/roboenv_perception/execution src/roboenv_perception/artifacts tests/test_components.py
-```
+[历史检查记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/ENVCREATOR_STUDIO.md)
 
 测试夹具覆盖接口、生命周期、真实掩码并集、视频修正后的轨迹引用、依赖篡改拒绝、过期验证、事件续读、取消持久化、原生身份与前端状态清理。夹具不作为真实 VLM、GPU 重建、物理功能或浏览器视觉验收。实际运行与逐阶段验收记录见 `reports/STUDIO_COMPONENT_ACCEPTANCE_20261109.md`。
 
 多场景、前景/背景分支并行、容器与资源调度的长期要求见 [Infra 长期规划](ENVCREATOR_INFRA_ROADMAP.md)。该规划本轮只记录，不实施。
 
-人工监督参考流程的受限工具接入、证据复用条件与执行准则见 [参考流程辅助重建](REFERENCE_GUIDED_RECONSTRUCTION.md)。当前组件目录共 30 项；4 个 reference 操作只支持注册的同视频电脑场景，不表示通用组件已经具备自动角点标定、任意物体照片投影和通用独立重载能力。
+人工监督参考流程的受限工具接入、证据复用条件与执行准则见 [参考流程辅助重建](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/REFERENCE_GUIDED_RECONSTRUCTION.md)。当前组件目录共 30 项；4 个 reference 操作只支持注册的同视频电脑场景，不表示通用组件已经具备自动角点标定、任意物体照片投影和通用独立重载能力。

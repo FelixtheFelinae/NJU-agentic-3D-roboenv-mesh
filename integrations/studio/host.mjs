@@ -49,6 +49,24 @@ export function registerTools(ctx, config) {
     sample_fps: { type: "number", exclusiveMinimum: 0, maximum: 30 },
     max_frames: { type: "integer", minimum: 1, maximum: 64 }, reference_frame: { type: "integer", minimum: 0 },
   }};
+  const positive = { type: "number", exclusiveMinimum: 0 };
+  const nonnegative = { type: "number", minimum: 0 };
+  const declaredDesign = { anyOf: [
+    { type: "object", additionalProperties: false,
+      required: ["kind", "screw_spec", "shaft_length_m", "thread"],
+      properties: {
+        kind: { const: "screw_cover" }, screw_spec: { enum: ["M3x0.5@1", "M4x0.7@1", "M5x0.8@1"] },
+        shaft_length_m: positive, cover_thickness_m: positive, base_thickness_m: positive,
+        outer_radius_m: positive, hole_diameter_m: positive,
+        thread: { type: "object", additionalProperties: false,
+          required: ["engagement_m", "unload_travel_m", "preload_N", "breakaway_torque_Nm", "running_torque_Nm"],
+          properties: { engagement_m: positive, unload_travel_m: positive, preload_N: nonnegative,
+            breakaway_torque_Nm: positive, running_torque_Nm: nonnegative } },
+      } },
+    { type: "object", additionalProperties: false, required: ["kind", "open_angle_deg"],
+      properties: { kind: { const: "hinged_cover" }, open_angle_deg: { ...positive, maximum: 180 },
+        size_x_m: positive, size_y_m: positive, cover_thickness_m: positive, base_thickness_m: positive } },
+  ] };
   const definitions = [
     [
       "context",
@@ -61,11 +79,12 @@ export function registerTools(ctx, config) {
       { run_id: { type: "string" } },
     ],
     ["workflow_start",
-      "Start the fixed reconstruction workflow for one target from uploaded video or images. A video first returns a labelled source contact sheet and asks for the sampling decision. Optional background and physics are off by default.",
+      "Start the fixed workflow with uploaded media or an explicit params.declared_design. For a declared screw cover or hinge, omit input_ids and leave physics and background off. It produces an unverified Isaac USD bundle. A video first asks for a sampling decision.",
       { task: { type: "string", minLength: 3, maxLength: 4000 },
         input_ids: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 32 },
         params: { type: "object", additionalProperties: false, properties: {
           background: { enum: ["off", "masks", "reconstruct"] }, physics: { type: "boolean" },
+          declared_design: declaredDesign,
         } },
       }],
     ["workflow_advance",
@@ -111,14 +130,13 @@ export function registerTools(ctx, config) {
   ];
   for (const component of config.debugComponentTools ? components.filter(c => !c.id.startsWith("workflow_")) : []) definitions.push([
     component.id,
-    `${component.title}. EnvCreator internal component. Input sources map roles to completed run IDs: ${JSON.stringify(component.inputs)}. Outputs: ${component.outputs.join(", ")}. Returns after execution, preserves versions. Use context/inspect for IDs. For single images use ingest -> inventory -> segment -> label; perceive handles video/multi-image. blueprint/geometry edits accept a previous source and full corrected task. Physics and scene export do not operate a robot. ${component.id.startsWith("reference_") ? "Registered same-video historical desktop workflow only; not a generic object generator. reference_fit uses the original perception source; it re-executes fitting using labelled historical manual corners/model-family evidence. reference_code params.asset_id is asset-0001 (bottle), asset-0002 (laptop), asset-0003 (mouse); invoke each to generate NEW candidates from frozen build-spec. Pass precise failures in params.feedback. reference_validate params.stage is appearance, geometry, qa, simulation, reload, hinge_primary, hinge_followup. reference_review params.asset_id is each object then scene. Every later call takes sources.reference = latest run. Inspect agent_observation.data.reference.latest and each verdict; completed tool invocation is not stage success. Never reuse old model/USD/verdicts as newly generated evidence. Retain failed small-angle hold tests and distinguish contact-oriented quality from unobserved internal detail." : ""}`,
+    `${component.title}. EnvCreator internal component. Input sources map roles to completed run IDs: ${JSON.stringify(component.inputs)}. Outputs: ${component.outputs.join(", ")}. Returns after execution, preserves versions. Use context/inspect for IDs. For single images use ingest -> inventory -> segment -> label; perceive handles video/multi-image. blueprint/geometry edits accept a previous source and full corrected task. Physics and scene export do not operate a robot.`,
     { task: {type: "string", maxLength: 4000},
       input_ids: {type: "array", items: {type: "string"}, maxItems: 32},
       sources: {type: "object", additionalProperties: {type: "string"}},
       object_id: {type: "string"},
       params: {type: "object", additionalProperties: true} },
   ]);
-  for (const definition of definitions) if (definition[0].startsWith("reference_")) definition[1] += " Video-only alternative: reference_fit params.evidence_policy=video_only uses raw SfM cameras and historical VIDEO pixel corners only, no catalog dimensions/aspect priors or old metric transform. It yields width=1 relative geometry, never recovered metres. Then build ONLY asset-0002; validate stages appearance, qa, geometry, render; review asset-0002 only. No metric physics, scene or product assumptions in this branch. Always retain video_only policy from source. Rendering needs Blender. No web/research calls for this experiment.";
   for (const definition of definitions) if (definition[0] === "blueprint_repair") definition[1] += " params.constraint_ids selects 1–4 existing geometric requirements. One narrow internal VLM proposal changes only bindings/descriptions and may add plane/axis/edge interfaces. All other fields are preserved by the program. A rejected proposal retains the source and returns needs_revision with constraint_repair evidence. Independent blueprint_review remains required before building.";
   for (const definition of definitions) if (["blueprint", "geometry", "geometry_audit", "build"].includes(definition[0])) definition[1] += " AssemblyBlueprint workflow: geometry_audit checks actual recipe features (shaft/hole, finite overlap, clearance and explicit plane relations); it does not test exported meshes or physical behavior. Read status and feedback even when the tool finishes. Missing bindings or part-only constraints are unresolved. For repair, pass sources.geometric_verification plus the exact sources.previous to blueprint/geometry; feedback is checked against the old candidate hashes. repair_target=geometry permits local recipe repair; blueprint or verifier requests require semantic revision or an unsupported-capability response. Build recomputes checks. Unknown limits/rest are allowed in descriptions; later export requires explicit assumptions. Never silently substitute recovered contact surfaces for a candidate hinge_region.";
   const longOperation = (op) => op !== "context" && op !== "inspect";
@@ -130,8 +148,9 @@ export function registerTools(ctx, config) {
         type: "object",
         properties,
         additionalProperties: false,
-        ...(["generate", "workflow_start"].includes(operation)
+        ...(operation === "generate"
           ? { required: ["task", "input_ids"] }
+          : operation === "workflow_start" ? { required: ["task"] }
           : operation === "workflow_advance" ? { required: ["parent_id", "params"] } : {}),
       },
       timeoutMs:
@@ -236,6 +255,7 @@ export function apply(ctx, config) {
     text: () =>
       "You are the native DSH task agent in EnvCreator Studio. Use context, then workflow_start for a new single-object reconstruction. EnvCreator runs perception, modeling and verification in a fixed order. You decide what evidence and structure to use. For video, read the timestamped original contact sheet: choose the window, sampling rate, frame budget and a reference frame with the target visible. Name the view or motion you need when requesting a revisit. At target selection, match the actual mask/context and justify whether the new track is the same object; never match by category alone. Review the structure, its evidence and unknowns before accepting or revising the proposed hypothesis. Follow allowed_actions and revision, using the original workflow_id for advancement. Treat candidate renders as diagnostic only. If no new observation can answer the question, stop with the remaining uncertainty. Background and physics run only if explicitly requested. Read the actual validation scope; workflow completion, visual acceptance and physical function are separate. On interruption, resume without changing the task. Summarize useful evidence and decisions in Chinese. EnvCreator VLM credentials are independent of your task model. No robot operation is registered." +
       " On evidence revisit, retain useful original views: the workflow fuses raw observations after your explicit identity decision. If more than 16 distinct frames are available, use observation tickets to select the useful old/new views. For a separate build candidate you may use propose_build with explicitly assumed scale/limits; bind it to the canonical blueprint hash and actual view refs. Canonical unknowns stay unknown, relative units cannot become metres, and adopted assumptions must pass independent review, recipe conformance and the original geometry gates." +
+      " For a screw cover or hinge with explicit design parameters, submit workflow_start with params.declared_design. Preserve user-specified dimensions and mechanics. Report the USD bundle as a candidate pending Isaac validation." +
       (config.debugComponentTools ? " Debug and legacy component tools are available for explicit component experiments." : ""),
   });
   const token = readFileSync(config.tokenFile, "utf8").trim();

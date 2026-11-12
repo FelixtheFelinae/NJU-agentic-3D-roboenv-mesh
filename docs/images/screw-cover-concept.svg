@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 310" role="img" aria-labelledby="title description">
+  <title id="title">螺钉盖板的装配剖面示意</title>
+  <desc id="description">左侧展示螺钉、盖板通孔和底座的同轴配合。右侧展示螺钉沿同一轴旋出，轴向位移等于导程乘以旋出净圈数。</desc>
+  <defs>
+    <pattern id="section" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <path d="M0 0v8" stroke="#7890aa" stroke-opacity=".35" stroke-width="2"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" markerWidth="6" markerHeight="6" refX="8" refY="5" orient="auto-start-reverse">
+      <path d="m1 1 7 4-7 4" fill="none" stroke="#156865" stroke-width="1.6"/>
+    </marker>
+  </defs>
+  <rect x="1" y="1" width="898" height="308" rx="16" fill="#f6f8fb" stroke="#ced8e4" stroke-width="2"/>
+  <path d="M450 26v258" stroke="#ced8e4"/>
+  <g font-family="system-ui, PingFang SC, Microsoft YaHei, sans-serif" fill="#19334d">
+    <text x="30" y="43" font-size="20" font-weight="700">初始配合</text>
+    <text x="480" y="43" font-size="20" font-weight="700">沿轴旋出</text>
+    <g transform="translate(58 0)">
+      <path d="M80 64v210" stroke="#7890aa" stroke-dasharray="5 5"/>
+      <path d="M0 132h65v21H0zm95 0h65v21H95z" fill="#b8d6f5" stroke="#426c95" stroke-width="2"/>
+      <path d="M0 155h65v82H0zm95 0h65v82H95z" fill="#dce6ef" stroke="#69819a" stroke-width="2"/>
+      <path d="M0 155h65v82H0zm95 0h65v82H95z" fill="url(#section)"/>
+      <path d="M53 104h54v26H90v75H70v-75H53z" fill="#38938d" stroke="#155c5c" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M61 163v42m38-42v42" fill="none" stroke="#156865" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <g fill="none" stroke="#69819a" stroke-width="1.25">
+        <path d="M107 115h104m-64 27h64m-112 47h112"/>
+      </g>
+      <g font-size="15">
+        <text x="222" y="120">独立刚体 · 螺钉</text>
+        <text x="222" y="147">盖板 · 间隙通孔</text>
+        <text x="222" y="194">底座 · 等效内螺纹</text>
+      </g>
+    </g>
+    <g transform="translate(513 0)">
+      <path d="M80 64v210" stroke="#7890aa" stroke-dasharray="5 5"/>
+      <path d="M0 132h65v21H0zm95 0h65v21H95z" fill="#b8d6f5" stroke="#426c95" stroke-width="2"/>
+      <path d="M0 155h65v82H0zm95 0h65v82H95z" fill="#dce6ef" stroke="#69819a" stroke-width="2"/>
+      <path d="M0 155h65v82H0zm95 0h65v82H95z" fill="url(#section)"/>
+      <path d="M53 104h54v26H90v75H70v-75H53z" fill="none" stroke="#69819a" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <path d="M53 64h54v26H90v75H70V90H53z" fill="#38938d" stroke="#155c5c" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M113 90h20m-20 40h20" stroke="#69819a"/>
+      <path d="M133 125V94" fill="none" stroke="#156865" stroke-width="2" marker-end="url(#arrow)"/>
+      <text x="150" y="98" font-size="16" font-weight="650">轴向位移</text>
+      <text x="150" y="120" font-size="15">导程 × 旋出净圈数</text>
+      <text x="181" y="192" font-size="15">达到有效啮合长度</text>
+      <text x="181" y="215" font-size="15">请求解除螺纹约束</text>
+    </g>
+  </g>
+</svg>

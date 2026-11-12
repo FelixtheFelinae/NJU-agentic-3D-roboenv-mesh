@@ -47,21 +47,7 @@
 
 `geometry/` 已用 Blender 从同一修正配方生成 OBJ、GLB、视觉 USD、Blender 文件和六张展示图。它们是修正资产的展示，不是新的受力拆卸回放。本轮没有重新运行感知、SAM、Artisan 整车导出或全流程长程任务；已实际执行专项 VLM 推断、规则修复、通用几何检查和 Blender 构建。
 
-```bash
-PYTHONPATH=src .venv/bin/python experiments/cart_full/repair_fasteners.py \
-  --source outputs/cart-full-20261027/assembly_spec_v4.json \
-  --output outputs/cart-fasteners-new
-
-/path/to/blender -b --threads 6 \
-  --python experiments/cart_full/blender_build.py -- \
-  --spec outputs/cart-fasteners-new/assembly_spec.json \
-  --output outputs/cart-fasteners-new/geometry
-
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q \
-  tests/test_harness_assembly.py tests/test_harness_run.py \
-  tests/test_harness_geometry.py tests/test_harness_task_scope.py \
-  tests/test_harness_scope_integration.py tests/test_cart_full.py
-```
+[历史检查记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/HARNESS_ASSEMBLY.md)
 
 整仓回归实际通过229项、跳过4项；24个导出垫圈/螺母的OBJ内外孔径检查通过。上面这组专项测试实际通过58项，覆盖旧式穿板、杆长不足、支架漂空、遗漏连接、虚构证据、错误螺母孔、工具障碍、异常轴向、修改后的哈希，以及 Harness 在导出前拒绝错误装配并传递反馈。修改后的控制流程尚未跑过一次从新视频开始的完整真实模型任务。
 

@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 
 from .contracts import Inventory, SAMConfig
-from .io import read_json, relative_file, sha256
+from .io import sha256
 
 
 @dataclass
@@ -19,38 +19,6 @@ class Detection:
     instance_id: str = ""
     raw_ids: list[str] = field(default_factory=list)
     track_keys: list[str] = field(default_factory=list)
-
-
-class ReplaySegmenter:
-    def __init__(self, config: SAMConfig):
-        self.path = Path(config.replay_manifest)
-        if not config.replay_manifest or not self.path.is_file():
-            raise ValueError("replay SAM requires an existing replay_manifest")
-
-    def segment(self, image: Image.Image, inventory: Inventory):
-        manifest = read_json(self.path)
-        if manifest.get("image_sha256"):
-            import hashlib
-            import io
-
-            buffer = io.BytesIO()
-            image.save(buffer, format="PNG")
-            if hashlib.sha256(buffer.getvalue()).hexdigest() != manifest["image_sha256"]:
-                raise ValueError("replayed masks belong to another normalized image")
-        ids = {item.candidate_id for item in inventory.objects}
-        detections = []
-        for row in manifest["detections"]:
-            if row["candidate_id"] not in ids:
-                raise ValueError("replay detection references an unknown candidate")
-            path = relative_file(self.path.parent, row["mask"])
-            with Image.open(path) as mask_image:
-                mask = np.array(mask_image.convert("L")) > 0
-            detections.append(Detection([row["candidate_id"]], mask, float(row["score"]), "replay"))
-        return detections, {
-            "backend": "replay",
-            "model_executed": False,
-            "manifest_sha256": sha256(self.path),
-        }
 
 
 class SAM3Segmenter:
@@ -127,8 +95,6 @@ class SAM3Segmenter:
 
 
 def make_segmenter(config: SAMConfig):
-    if config.backend == "replay":
-        return ReplaySegmenter(config)
     if config.backend == "grounded_sam2":
         from .grounded_sam2 import GroundedSAM2Segmenter
 

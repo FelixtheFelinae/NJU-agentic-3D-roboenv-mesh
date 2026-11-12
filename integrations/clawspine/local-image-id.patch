@@ -113,31 +113,3 @@ index 97f0dc0..e547ae0 100644
        ...(native ? mount(workspace, '/agent-workspace', false) : []),
        ...(nativeSettings ? mount(nativeSettings.directory, '/runtime-settings') : []),
        ...(cfg.controller === 'sonic' ? mount(realpathSync(cfg.sonicModelDir), '/sonic-models') : []),
-diff --git a/test/unified-sim-launcher.test.mjs b/test/unified-sim-launcher.test.mjs
-index 5cace0c..b9a9704 100644
---- a/test/unified-sim-launcher.test.mjs
-+++ b/test/unified-sim-launcher.test.mjs
-@@ -3,7 +3,7 @@ import { test } from 'node:test';
- import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
- import { tmpdir } from 'node:os';
- import { join } from 'node:path';
--import { makeUnifiedPatch, parseSimOptions, unifiedSkillsReady, unifiedBodyFiles, snapshotUnifiedBody, snapshotNativeInput } from '../scripts/launch_dsh_sim.mjs';
-+import { makeUnifiedPatch, parseSimOptions, resolveDeploymentImages, unifiedSkillsReady, unifiedBodyFiles, snapshotUnifiedBody, snapshotNativeInput } from '../scripts/launch_dsh_sim.mjs';
- import { processInvocation } from '../scripts/rsi/process-runtime.mjs';
- 
- const args = ['--scene-usd', '/tmp/fixture/scene.usd', '--scene-id', 'arbitrary-room', '--spawn', '1,-1,0,1.5', '--observer-eye', '2,-4,2', '--observer-target', '2,0,1'];
-@@ -20,6 +20,14 @@ test('scene/spawn/camera and port validation rejects malformed frames', () => {
-   assert.throws(() => parseSimOptions([...args, '--seed', '-1']));
-   assert.throws(() => parseSimOptions([...args, '--gpu-wait-seconds', '901']));
- });
-+test('an explicitly built Arena image reaches the deployment binding by immutable identity', () => {
-+  const id = 'sha256:' + 'b'.repeat(64);
-+  const cfg = parseSimOptions([...args, '--arena-image-id', id]);
-+  assert.equal(resolveDeploymentImages(cfg).arena, id);
-+  assert.equal(resolveDeploymentImages(cfg).policy, resolveDeploymentImages().policy);
-+  assert.throws(() => parseSimOptions([...args, '--arena-image-id', 'unverified:latest']));
-+  assert.throws(() => resolveDeploymentImages({ runtimeBackend: 'process', arenaImageId: id }));
-+});
- test('profile uses shared existing HRs and actor credential only, not a private scene judge', () => {
-   const patch = makeUnifiedPatch({ runDir: '/tmp/private-run', actorTokenFile: '/tmp/private-run/actor-auth/actor.token', backendPort: 28561, modelProfile: '# model route from existing profile' });
-   assert.ok(patch.includes('@clawspine/platform-g1-arena-dsh/unified'));

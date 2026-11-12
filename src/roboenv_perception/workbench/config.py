@@ -18,9 +18,9 @@ class Settings(BaseModel):
     perception_config: Path | None = None
     construction_config: Path | None = None
     artisan_python: Path | None = None
+    usd_python: Path | None = None
     blender: Path | None = None
     isaac_python: Path | None = None
-    reference_case_root: Path | None = None
     env_file: Path | None = None
     max_concurrent: int = Field(default=1, ge=1, le=4)
     max_revisions: int = Field(default=3, ge=1, le=8)
@@ -29,6 +29,10 @@ class Settings(BaseModel):
     physics: bool = True
     web_search: bool = True
     background_mode: Literal["off", "masks", "auto"] = "auto"
+
+    @property
+    def usd_executable(self):
+        return self.usd_python or self.artisan_python
 
     @classmethod
     def load(cls, path):
@@ -40,12 +44,12 @@ class Settings(BaseModel):
         return config
 
     def generation_missing(self):
-        required = ["perception_config", "construction_config", "artisan_python"]
+        required = ["perception_config", "construction_config", "usd_executable"]
         if self.physics:
             required.append("isaac_python")
         required.extend(name for name in ("blender", "env_file") if getattr(self, name))
         return [
-            name
+            "usd_python" if name == "usd_executable" else name
             for name in required
             if not getattr(self, name) or not getattr(self, name).is_file()
         ]

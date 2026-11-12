@@ -1,32 +1,33 @@
-# 文档索引
+# Agent Harness 文档
 
-当前主线是 `scene-harness` 的实验性自动构建；感知和背景阶段也可单独调用。先看 [仓库首页](../README.md) 和 [代码结构](ARCHITECTURE.md)。
+## 入口与架构
 
-跨对话继续开发时，先读 [Reconstruction Harness 当前进度与 TODO](RECONSTRUCTION_HARNESS_HANDOFF_TODO.md)，核对实现基线、真实失败和正在进行的审查。
+- [当前流程简图](WORKFLOW_OVERVIEW.md)
+- [本地清理范围与检查记录](HARNESS_CLEANUP.md)
+- [代码调用关系](ARCHITECTURE.md)
+- [固定重建 Workflow](FIXED_RECONSTRUCTION_WORKFLOW.md)
+- [Studio 与原生 DSH](ENVCREATOR_STUDIO.md)
+- [批处理构建 Harness](AGENTIC_HARNESS.md)
+- [环境准备](HOST_SETUP.md)
+- [DSH 模型配置](DSH_MODEL.md)
 
-## 当前方法与使用
+## 构建与验证
 
-| 环节 | 文档 |
-| --- | --- |
-| 自动构建、修复、复审与交付 | [Harness](AGENTIC_HARNESS.md) |
-| 多图片输入与身份关联 | [媒体输入](HARNESS_MEDIA.md) |
-| 可选网页检索与证据 | [联网路径](HARNESS_WEB.md) |
-| VLM API 请求与配置 | [API](API.md) |
-| 图像感知 | [第一步](STEP1.md) |
-| 视频、独立标注与评估 | [第二、三步](STEP23.md) |
-| Grounding DINO + SAM2.1 | [替代分割后端](GROUNDED_SAM2.md) |
-| 对象证据、蓝图、背景 mask、桌面纹理 | [构建说明](CONSTRUCTION.md) |
-| COLMAP / 3DGS 环境与训练 | [重建运行时](RECONSTRUCTION_RUNTIME.md) |
-| Blender 后台建模与 Artisan 导出 | [建模后端](BLENDER_BACKEND.md) |
-| 开发主机与依赖 | [主机准备](HOST_SETUP.md) |
-| SAM3 权重准备与迁移 | [权重迁移](SAM3_TRANSFER.md) |
+- [装配蓝图](ASSEMBLY_BLUEPRINT.md)
+- [机械几何审核](MECHANICAL_GEOMETRIC_VERIFICATION.md)
+- [装配构建](HARNESS_ASSEMBLY.md)
+- [Artisan 后端](ARTISAN_BACKEND.md)
+- [Blender 后端](BLENDER_BACKEND.md)
+- [资产物理要求](PHYSICAL_ASSET_REQUIREMENTS.md)
+- [标准交互](STANDARD_INTERACTIONS.md)
+- [多图输入](HARNESS_MEDIA.md)
+- [外部资料检索](HARNESS_WEB.md)
+- [背景重建](RECONSTRUCTION_RUNTIME.md)
+- [本地背景扩图](LOCAL_BACKGROUND.md)
 
-## 已有资产与专用实验
+## 对外交付
 
-统一入口为 [实验目录](EXPERIMENTS.md)。各实验的输入假设、实际结果和限制仍保留在其原始文档中；它们不代表任意输入都可自动复现相同效果。
+- [ClawSpine 与场景依赖包](ENVCREATOR_CLAWSPINE.md)
+- [工具运行时接口](NATIVE_SCREWDRIVER.md)
 
-## 历史记录
-
-验证日志、2026-10-26 资产盘点、阶段规划和 2026-10-27 Harness 运行记录统一放在 [history/](history/README.md)。历史文档中的待实现项和测试数量按记录日期理解；当前调用关系以源码和上述使用文档为准。
-
-`outputs/` 和真实测试素材未提交，文档路径需要在保存了对应工件的运行主机上打开。
+开发测试、合成演示、专用实验及历史报告可从 [清理前提交](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/tree/43d3c72b3f7699e32eb297816828a5ed9874a232) 查阅。

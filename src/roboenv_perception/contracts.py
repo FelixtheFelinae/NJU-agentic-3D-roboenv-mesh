@@ -90,7 +90,7 @@ class Labels(Contract):
 
 
 class VLMConfig(Contract):
-    backend: Literal["http", "replay"] = "http"
+    backend: Literal["http"] = "http"
     style: Literal["chat_completions", "responses", "generic"] = "chat_completions"
     endpoint: str = ""
     model: str = ""
@@ -103,16 +103,14 @@ class VLMConfig(Contract):
     extra_body: dict = Field(default_factory=dict)
     request_template: dict = Field(default_factory=dict)
     response_path: str = ""
-    replay_dir: str = ""
 
 
 class SAMConfig(Contract):
-    backend: Literal["sam3", "grounded_sam2", "replay"] = "sam3"
+    backend: Literal["sam3", "grounded_sam2"] = "sam3"
     checkpoint: str = ""
     device: Literal["cuda"] = "cuda"
     confidence_threshold: float = Field(default=0.5, ge=0, le=1)
     box_fallback: bool = True
-    replay_manifest: str = ""
     sam2_model_config: str = "configs/sam2.1/sam2.1_hiera_s.yaml"
     grounding_model_path: str = ""  # local Transformers snapshot; never downloads implicitly
     grounding_threshold: float = Field(default=0.3, ge=0, le=1)
@@ -131,7 +129,6 @@ class VideoConfig(Contract):
     start_seconds: float = Field(default=0, ge=0)
     end_seconds: float | None = Field(default=None, gt=0)
     reference_frame: int = Field(default=0, ge=0)
-    replay_manifest: str = ""
     preview_fps: int = Field(default=5, ge=1, le=60)
 
     @model_validator(mode="after")
@@ -146,73 +143,3 @@ class PipelineConfig(Contract):
     sam: SAMConfig = Field(default_factory=SAMConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)
-
-
-class TruthObject(Contract):
-    gt_id: str = Field(min_length=1)
-    category: str = Field(min_length=1)
-    mask: str | None = None
-    visible: bool = True
-    critical: bool = False
-    exclude_from_background: bool = True
-
-    @model_validator(mode="after")
-    def visible_requires_mask(self):
-        if self.visible and not self.mask:
-            raise ValueError("visible ground-truth objects require a mask")
-        return self
-
-
-class TruthFrame(Contract):
-    frame_id: str = Field(min_length=1)
-    image: str
-    image_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
-    objects: list[TruthObject]
-    ignore_mask: str | None = None
-
-    @model_validator(mode="after")
-    def unique_ids(self):
-        ids = [item.gt_id for item in self.objects]
-        if len(ids) != len(set(ids)):
-            raise ValueError("ground-truth IDs must be unique within a frame")
-        return self
-
-
-class TruthDocument(Contract):
-    schema_version: str = SCHEMA_VERSION
-    frames: list[TruthFrame] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def unique_frames(self):
-        ids = [f.frame_id for f in self.frames]
-        if len(ids) != len(set(ids)):
-            raise ValueError("duplicate truth frames")
-        return self
-
-
-class EvaluationSample(Contract):
-    sample_id: str = Field(min_length=1)
-    kind: Literal["image", "video"]
-    truth: str
-    prediction: str | None = None
-    failure_reason: str | None = None
-
-
-class EvaluationManifest(Contract):
-    schema_version: str = SCHEMA_VERSION
-    dataset_id: str = Field(min_length=1)
-    annotation_source: Literal["human", "synthetic_fixture"]
-    split: Literal["development", "validation", "test"] = "validation"
-    samples: list[EvaluationSample] = Field(min_length=1)
-    match_iou: float = Field(default=0.5, gt=0, le=1)
-    target_critical_recall: float = Field(default=0.95, ge=0, le=1)
-    target_mean_iou: float = Field(default=0.85, ge=0, le=1)
-    max_foreground_leakage: float = Field(default=0.02, ge=0, le=1)
-    max_id_switches: int = Field(default=0, ge=0)
-
-    @model_validator(mode="after")
-    def unique_samples(self):
-        ids = [item.sample_id for item in self.samples]
-        if len(ids) != len(set(ids)):
-            raise ValueError("sample IDs must be unique")
-        return self

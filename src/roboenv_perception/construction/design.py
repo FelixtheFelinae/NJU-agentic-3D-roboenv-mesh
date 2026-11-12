@@ -145,7 +145,7 @@ def design_objects(evidence_root: Path, output: Path, config: ConstructionConfig
         sources["object_scope_sha256"] = sha256(object_scope)
     with new_run(output, "object_design", sources) as run:
         run["task_context"] = task or "not_provided"
-        run["model_execution"] = "replayed" if config.vlm.backend == "replay" else "http_requested"
+        run["model_execution"] = "http_requested"
         write_json(output / "measurements.json", supplied.model_dump(mode="json"))
         if external_evidence:
             copy_ref(external_evidence.parent, external_evidence.name, output, "external_evidence.json")

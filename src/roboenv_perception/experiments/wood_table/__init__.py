@@ -1,1 +1,0 @@
-"""Reproducible wood table experiments."""

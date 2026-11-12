@@ -75,15 +75,9 @@ def run(
         "gaussian": {"iterations", "resume"},
         "overview": {"frame_id"},
         "physics": {"assembly_validation"},
-        "reference_fit": {"evidence_policy"},
-        "reference_code": {"asset_id", "feedback"},
-        "reference_validate": {"stage"},
-        "reference_review": {"asset_id"},
     }.get(operation, set())
     if set(params) - allowed:
         raise ValueError("此操作包含未支持的参数：" + ", ".join(set(params) - allowed))
-    if operation == 'reference_fit' and params.get('evidence_policy', 'historical_reference') not in {'historical_reference', 'video_only'}:
-        raise ValueError('evidence_policy must be historical_reference or video_only')
     feedback = params.get("feedback", [])
     if (
         not isinstance(feedback, list)
@@ -103,11 +97,7 @@ def run(
     )
     output.mkdir(parents=True, exist_ok=True)
     with span(operation, object_id=object_id):
-        if operation.startswith("reference_"):
-            from .reference_workflow import execute
-
-            return execute(operation, paths, output, settings, params, feedback)
-        elif operation == "ingest":
+        if operation == "ingest":
             perception.ingest(inputs, output / "images")
             exports = {"images": "images"}
         elif operation == "inventory":
@@ -590,6 +580,7 @@ def geometry_operation(operation, paths, output, settings, task, object_id, conf
             recipe,
             output / "built",
             artisan_python=settings.artisan_python,
+            usd_python=settings.usd_python,
             blender=settings.blender,
             timeout_seconds=min(settings.max_wall_seconds, 900),
         )
@@ -626,7 +617,7 @@ def geometry_operation(operation, paths, output, settings, task, object_id, conf
         "build_status": "visual_review_passed" if passed else "unverified",
         "usd": candidate["usd"],
         "usd_sha256": candidate["usd_sha256"],
-        "model_ref": str(paths["built"] / "model.py"),
+        "model_ref": candidate.get("model_ref", str(paths["built"] / "model.py")),
         "recipe_ref": str(paths["recipe"]),
         "preview_refs": candidate["visual_previews"],
         "physics_status": "not_run",
@@ -648,12 +639,14 @@ def scene_operation(operation, paths, output, settings, task, params):
     # Existing scene helpers accept a request; the placeholder is metadata only, never ingested.
     request = HarnessRequest(task=task or "检查当前资产", images=[output / "unused"])
     if operation == "scene":
+        assets = read_json(paths["assets"] / "assets.json")["objects"]
+        legacy_placement = settings.artisan_python if any(row.get("standard_bundle") for row in assets) else None
         _assemble(
             output / "scene",
             paths["assets"],
             paths["evidence"],
             request,
-            usd_python=settings.artisan_python,
+            usd_python=legacy_placement,
         )
         result = read_json(output / "scene/scene_result.json")
         return {"scene": "scene"}, "unverified" if result.get(
@@ -666,7 +659,8 @@ def scene_operation(operation, paths, output, settings, task, params):
         cfg = HarnessSettings(
             perception_config=settings.perception_config or output / "unused",
             construction_config=settings.construction_config or output / "unused",
-            artisan_python=settings.artisan_python or output / "unused",
+            artisan_python=settings.artisan_python,
+            usd_python=settings.usd_python,
             isaac_python=settings.isaac_python,
             assembly_validation=mode,
             physics_timeout_seconds=min(max(settings.max_wall_seconds, 30), 7200),
@@ -724,6 +718,7 @@ def scene_operation(operation, paths, output, settings, task, params):
         output / "delivery.json",
         {
             "status": "unverified",
+            "scene_id": "scene-" + sha256(paths["scene"] / scene_result["scene_ref"])[:16],
             "task": task,
             "scene_usd": str(paths["scene"] / scene_result["scene_ref"]),
             "assets": read_json(paths["assets"] / "assets.json")["objects"],
@@ -731,5 +726,5 @@ def scene_operation(operation, paths, output, settings, task, params):
             "scope": "asset package; inspect bound validation conditions; no robot execution",
         },
     )
-    export_bundle(output / "delivery.json", output / "bundle", settings.artisan_python)
+    export_bundle(output / "delivery.json", output / "bundle", settings.usd_executable)
     return {"delivery": "bundle"}, "unverified"

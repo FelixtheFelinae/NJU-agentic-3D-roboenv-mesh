@@ -32,7 +32,7 @@ def run(output):
     meshes, objects = [], []
 
     def export_mesh(name, obj, rgba=(0.46, 0.48, 0.47, 1), material_class="matte_plastic",
-                    part="body", preview_translation=(0, 0, 0)):
+                    part="body", preview_translation=(0, 0, 0), collision_for=None):
         if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or any(m["name"] == name for m in meshes):
             raise ValueError(f"Invalid or duplicate export name: {name}")
         if len(rgba) != 4 or not all(math.isfinite(c) and 0 <= c <= 1 for c in rgba):
@@ -88,6 +88,11 @@ def run(output):
                        "watertight": closed, "components": components, "volume_m3": volume,
                        "bounds_m": bounds, "rgba": list(rgba), "material_class": material_class,
                        "part": part, "preview_translation": list(preview_translation)})
+        if collision_for is not None:
+            meshes[-1]["collision_for"] = collision_for
+            bpy.data.objects.remove(obj, do_unlink=True)
+            bpy.data.meshes.remove(data)
+            return
         material = bpy.data.materials.new(name + "_finish")
         material.diffuse_color = rgba
         material.use_nodes = True
@@ -106,10 +111,11 @@ def run(output):
 
     runpy.run_path(str(output / "generator.py"), init_globals={"export_mesh": export_mesh,
                                                             "parameters": params})
-    if not meshes:
-        raise ValueError("Generator did not call export_mesh")
-    low = Vector([min(m["bounds_m"][0][i] + m["preview_translation"][i] for m in meshes) for i in range(3)])
-    high = Vector([max(m["bounds_m"][1][i] + m["preview_translation"][i] for m in meshes) for i in range(3)])
+    visuals = [mesh for mesh in meshes if "collision_for" not in mesh]
+    if not visuals:
+        raise ValueError("Generator did not export a visual mesh")
+    low = Vector([min(m["bounds_m"][0][i] + m["preview_translation"][i] for m in visuals) for i in range(3)])
+    high = Vector([max(m["bounds_m"][1][i] + m["preview_translation"][i] for m in visuals) for i in range(3)])
     span, center = max(high - low), (high + low) / 2
     previews = []
     if request["render"]:

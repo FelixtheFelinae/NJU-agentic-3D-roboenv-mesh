@@ -1,4 +1,4 @@
-"""Production workflows run on Linux/NVIDIA; fixture tests never imply CUDA validation."""
+"""Production model workflows run on Linux/NVIDIA."""
 
 import platform
 

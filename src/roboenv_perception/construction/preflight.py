@@ -25,32 +25,25 @@ def check_readiness(
 
     def vlm_checks(prefix, vlm):
         valid = False
-        if vlm.backend == "http":
-            try:
-                HTTPVLM(vlm)
-                valid = True
-            except ValueError:
-                pass
+        try:
+            HTTPVLM(vlm)
+            valid = True
+        except ValueError:
+            pass
+        add(
+            prefix + ".endpoint_and_model",
+            valid,
+            "Fill the complete request URL, model and API style.",
+        )
+        names = sorted(
+            set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", " ".join(vlm.headers.values())))
+        )
+        for name in names:
             add(
-                prefix + ".endpoint_and_model",
-                valid,
-                "Fill the complete request URL, model and API style.",
-            )
-            names = sorted(
-                set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", " ".join(vlm.headers.values())))
-            )
-            for name in names:
-                add(
-                    prefix + ".env." + name,
-                    bool(os.getenv(name)),
-                    f"Set {name} in the process environment; do not commit the secret.",
-                    "credentials",
-                )
-        else:
-            add(
-                prefix + ".replay_directory",
-                bool(vlm.replay_dir) and Path(vlm.replay_dir).is_dir(),
-                "Set an existing replay directory. Replay does not establish live readiness.",
+                prefix + ".env." + name,
+                bool(os.getenv(name)),
+                f"Set {name} in the process environment; do not commit the secret.",
+                "credentials",
             )
 
     vlm_checks("design.vlm", config.vlm)
@@ -58,45 +51,42 @@ def check_readiness(
         perception = load_config(perception_path)
         vlm_checks("perception.vlm", perception.vlm)
         sam = perception.sam
-        if sam.backend == "replay":
-            add("perception.replay_not_live", False, "Select a live segmentation backend.")
-        else:
-            module = "sam2" if sam.backend == "grounded_sam2" else "sam3"
+        module = "sam2" if sam.backend == "grounded_sam2" else "sam3"
+        add(
+            f"perception.{module}_module",
+            importlib.util.find_spec(module) is not None,
+            f"Install the official {module} source.",
+            "dependency",
+        )
+        add(
+            f"perception.{module}_checkpoint",
+            bool(sam.checkpoint) and Path(sam.checkpoint).is_file(),
+            f"Fill sam.checkpoint with a local {module} checkpoint.",
+        )
+        if sam.backend == "grounded_sam2":
             add(
-                f"perception.{module}_module",
-                importlib.util.find_spec(module) is not None,
-                f"Install the official {module} source.",
+                "perception.transformers_module",
+                importlib.util.find_spec("transformers") is not None,
+                "Install the grounded-sam2 optional dependencies.",
                 "dependency",
             )
             add(
-                f"perception.{module}_checkpoint",
-                bool(sam.checkpoint) and Path(sam.checkpoint).is_file(),
-                f"Fill sam.checkpoint with a local {module} checkpoint.",
-            )
-            if sam.backend == "grounded_sam2":
-                add(
-                    "perception.transformers_module",
-                    importlib.util.find_spec("transformers") is not None,
-                    "Install the grounded-sam2 optional dependencies.",
-                    "dependency",
-                )
-                add(
-                    "perception.grounding_snapshot",
-                    bool(sam.grounding_model_path)
-                    and all(
-                        (Path(sam.grounding_model_path) / name).is_file()
-                        for name in (
-                            "config.json",
-                            "preprocessor_config.json",
-                            "tokenizer_config.json",
-                        )
+                "perception.grounding_snapshot",
+                bool(sam.grounding_model_path)
+                and all(
+                    (Path(sam.grounding_model_path) / name).is_file()
+                    for name in (
+                        "config.json",
+                        "preprocessor_config.json",
+                        "tokenizer_config.json",
                     )
-                    and any(
-                        (Path(sam.grounding_model_path) / name).is_file()
-                        for name in ("model.safetensors", "pytorch_model.bin")
-                    ),
-                    "Set sam.grounding_model_path to a local Grounding DINO snapshot.",
                 )
+                and any(
+                    (Path(sam.grounding_model_path) / name).is_file()
+                    for name in ("model.safetensors", "pytorch_model.bin")
+                ),
+                "Set sam.grounding_model_path to a local Grounding DINO snapshot.",
+            )
     add(
         "input.media",
         media is not None and media.is_file(),

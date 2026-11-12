@@ -4,7 +4,7 @@ import math
 import subprocess
 from pathlib import Path
 
-from ..construction.asset_agents import child_environment
+from ..construction.artisan_backend import child_environment
 from ..construction.contracts import Blueprint
 from ..harness.geometry import GeometryRecipe, build_recipe
 from ..io import read_json, sha256, write_json

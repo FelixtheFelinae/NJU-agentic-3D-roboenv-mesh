@@ -34,8 +34,7 @@
           "default": "sam3",
           "enum": [
             "sam3",
-            "grounded_sam2",
-            "replay"
+            "grounded_sam2"
           ],
           "title": "Backend",
           "type": "string"
@@ -62,11 +61,6 @@
           "default": true,
           "title": "Box Fallback",
           "type": "boolean"
-        },
-        "replay_manifest": {
-          "default": "",
-          "title": "Replay Manifest",
-          "type": "string"
         },
         "sam2_model_config": {
           "default": "configs/sam2.1/sam2.1_hiera_s.yaml",
@@ -100,11 +94,8 @@
       "additionalProperties": false,
       "properties": {
         "backend": {
+          "const": "http",
           "default": "http",
-          "enum": [
-            "http",
-            "replay"
-          ],
           "title": "Backend",
           "type": "string"
         },
@@ -168,11 +159,6 @@
           "default": "",
           "title": "Response Path",
           "type": "string"
-        },
-        "replay_dir": {
-          "default": "",
-          "title": "Replay Dir",
-          "type": "string"
         }
       },
       "title": "VLMConfig",
@@ -219,11 +205,6 @@
           "minimum": 0,
           "title": "Reference Frame",
           "type": "integer"
-        },
-        "replay_manifest": {
-          "default": "",
-          "title": "Replay Manifest",
-          "type": "string"
         },
         "preview_fps": {
           "default": 5,

@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 from .contracts import VLMConfig
 from .execution.context import traced
-from .io import read_json, sha256, write_json
+from .io import sha256, write_json
 from .prompts import SYSTEM
 
 
@@ -220,36 +220,5 @@ class HTTPVLM:
         return result
 
 
-class ReplayVLM:
-    def __init__(self, config: VLMConfig):
-        self.root = Path(config.replay_dir)
-        if not config.replay_dir or not self.root.is_dir():
-            raise ValueError("replay VLM requires an existing replay_dir")
-
-    @traced(lambda a, k: "Replay VLM / " + str(a[1] if len(a) > 1 else k.get("stage")))
-    def infer(self, stage, prompt, images, schema, trace):
-        source = self.root / f"{stage}.json"
-        result = read_json(source)
-        write_json(
-            trace / "request.json",
-            {
-                "backend": "replay",
-                "prompt": prompt,
-                "images": [{"name": p.name, "sha256": sha256(p)} for p in images],
-            },
-        )
-        write_json(trace / "response.json", result)
-        write_json(
-            trace / "call.json",
-            {
-                "backend": "replay",
-                "source_sha256": sha256(source),
-                "model_executed": False,
-                "provider_cost": None,
-            },
-        )
-        return result
-
-
 def make_vlm(config: VLMConfig, system: str = SYSTEM) -> VLM:
-    return ReplayVLM(config) if config.backend == "replay" else HTTPVLM(config, system=system)
+    return HTTPVLM(config, system=system)

@@ -154,9 +154,6 @@ def research_objects(evidence_root: Path, output: Path, config: VLMConfig,
             continue
         work = output / entry["asset_id"]
         work.mkdir()
-        if config.backend == "replay":
-            record.update(status="skipped_replay", reason="no replay product identification configured")
-            continue
         try:
             guess = infer_model(
                 make_vlm(config, system="Identify the visible product, if possible. JSON only. "

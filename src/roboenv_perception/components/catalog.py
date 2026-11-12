@@ -5,21 +5,6 @@ WORKFLOW_OPERATIONS = {"workflow_start", "workflow_advance"}
 CATALOG = {
     "workflow_start": ("开始固定重建流程", {}, ["workflow"], []),
     "workflow_advance": ("提交重建决策或恢复流程", {}, ["workflow"], []),
-    "reference_fit": (
-        "复算参考流程的观测拟合", {"perception": "perception"}, ["reference"],
-        ["reference_case_root", "artisan_python"],
-    ),
-    "reference_code": (
-        "按冻结蓝图生成资产", {"reference": "reference"}, ["reference"],
-        ["construction_config", "artisan_python"],
-    ),
-    "reference_validate": (
-        "执行参考流程的外观与验证", {"reference": "reference"}, ["reference"], [],
-    ),
-    "reference_review": (
-        "独立审核参考流程的新候选", {"reference": "reference"}, ["reference"],
-        ["construction_config", "artisan_python"],
-    ),
     "ingest": ("准备输入", {}, ["images"], []),
     "inventory": ("识别候选物体", {"images": "images"}, ["inventory"], ["perception_config"]),
     "segment": (
@@ -88,7 +73,7 @@ CATALOG = {
         "构建模型",
         {"blueprint": "blueprint", "recipe": "recipe", "blueprint_review": "blueprint_review"},
         ["built"],
-        ["artisan_python"],
+        ["usd_executable"],
     ),
     "render": ("更新渲染", {"blueprint": "blueprint", "recipe": "recipe"}, ["renders"], []),
     "geometry_review": (
@@ -134,7 +119,7 @@ CATALOG = {
         "打包交付",
         {"scene": "scene", "assets": "assets"},
         ["delivery"],
-        ["artisan_python"],
+        ["usd_executable"],
     ),
 }
 
@@ -151,9 +136,8 @@ def requirements(operation, settings):
         raise ValueError("未注册的组件操作")
     fields = CATALOG[operation][3]
     missing = [
-        key for key in fields if not getattr(settings, key) or not (
-            getattr(settings, key).is_dir() if key == "reference_case_root"
-            else getattr(settings, key).is_file()
+        ("usd_python" if key == "usd_executable" else key) for key in fields if not getattr(settings, key) or not (
+            getattr(settings, key).is_file()
         )
     ]
     if operation in {"build", "render"}:

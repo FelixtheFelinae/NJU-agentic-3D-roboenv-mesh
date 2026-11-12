@@ -1,12 +1,11 @@
 """Official SAM 3 video adapter with per-concept sessions and disk-backed mask storage."""
 
-import math
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-from .io import read_json, relative_file, sha256, write_json
+from .io import relative_file, sha256, write_json
 from .masks import save_mask
 from .runtime import require_cuda
 from .segmentation import Detection
@@ -29,57 +28,6 @@ def load_frame_detections(manifest: dict, index: int, root: Path):
             )
         )
     return detections
-
-
-class ReplayVideoBackend:
-    def __init__(self, path: str):
-        self.path = Path(path)
-        if not path or not self.path.is_file():
-            raise ValueError("video replay requires video.replay_manifest")
-
-    def track(self, root, frames, inventory, reference_frame):
-        source = read_json(self.path)
-        if len(source["frames"]) != len(frames):
-            raise ValueError("video replay does not cover exactly the selected frame set")
-        ids = {c.candidate_id for c in inventory.objects}
-        destination = {
-            "backend": "replay",
-            "model_executed": False,
-            "manifest_sha256": sha256(self.path),
-            "frames": [],
-        }
-        for index, (raw, frame) in enumerate(zip(source["frames"], frames, strict=True)):
-            if raw["image_sha256"] != frame["image_sha256"]:
-                raise ValueError("replay video frame hash mismatch")
-            rows, used = [], set()
-            for item_index, row in enumerate(raw["detections"]):
-                if not row["candidate_ids"] or not set(row["candidate_ids"]) <= ids:
-                    raise ValueError("unknown video candidate reference")
-                keys = row["track_keys"]
-                if (
-                    not keys
-                    or len(keys) != len(set(keys))
-                    or any(not isinstance(k, str) or not k for k in keys)
-                    or used.intersection(keys)
-                ):
-                    raise ValueError("duplicate or invalid native track key within frame")
-                used.update(keys)
-                score = float(row["score"])
-                if not math.isfinite(score) or not 0 <= score <= 1:
-                    raise ValueError("invalid video score")
-                ref = f"stages/tracking/masks/{index:06d}/{item_index:04d}.png"
-                with Image.open(relative_file(self.path.parent, row["mask_ref"])) as mask:
-                    mask.load()
-                    if mask.mode != "L" or not np.isin(np.array(mask), [0, 255]).all():
-                        raise ValueError("replay video mask must be binary L PNG")
-                    (root / ref).parent.mkdir(parents=True, exist_ok=True)
-                    mask.save(root / ref)
-                rows.append({**row, "score": score, "mask_ref": ref})
-            destination["frames"].append(
-                {"image_sha256": frame["image_sha256"], "detections": rows}
-            )
-        write_json(root / "stages/tracking/manifest.json", destination)
-        return destination
 
 
 class SAM3VideoBackend:
@@ -184,8 +132,6 @@ class SAM3VideoBackend:
 
 
 def make_video_backend(config):
-    if config.sam.backend == "replay":
-        return ReplayVideoBackend(config.video.replay_manifest)
     if config.sam.backend == "grounded_sam2":
         from .grounded_sam2 import GroundedSAM2VideoBackend
 

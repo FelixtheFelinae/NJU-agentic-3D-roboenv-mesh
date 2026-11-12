@@ -16,19 +16,6 @@ def add_commands(commands):
     doctor.add_argument("--perception-config", type=Path)
     doctor.add_argument("--media", type=Path)
     doctor.add_argument("--output", type=Path)
-    demo = commands.add_parser(
-        "demo-construction", help="Synthetic A-C plumbing demo; no model/API training"
-    )
-    demo.set_defaults(construction_action="demo-construction")
-    demo.add_argument("--output", type=Path, required=True)
-    simulation = commands.add_parser(
-        "prepare-table-sim", help="Prepare a scaled tabletop job for a separate Isaac Lab worker"
-    )
-    simulation.set_defaults(construction_action="prepare-table-sim")
-    simulation.add_argument("--table", type=Path, required=True)
-    simulation.add_argument("--spec", type=Path, required=True)
-    simulation.add_argument("--output", type=Path, required=True)
-
     for name, source, help_text in [
         ("prepare-objects", "bundle", "Select object evidence from a perception run"),
         ("design-objects", "evidence", "Run intake, blueprint and bounded self-review"),
@@ -52,12 +39,6 @@ def add_commands(commands):
 
 
 def execute(args):
-    if args.construction_action == "prepare-table-sim":
-        from .simulation import prepare_table_simulation
-
-        prepare_table_simulation(args.table, args.spec, args.output)
-        print(json.dumps({"output": str(args.output.resolve()), "physics_validation": "not_run"}))
-        return 0
     if args.construction_action == "construction-doctor":
         from ..io import write_json
         from .preflight import check_readiness
@@ -69,12 +50,6 @@ def execute(args):
             write_json(args.output, result)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result["ready"] else 2
-    if args.construction_action == "demo-construction":
-        from .demo import run_demo
-
-        print(json.dumps(run_demo(args.output), ensure_ascii=False, indent=2))
-        return 0
-
     from .background import prepare_background
     from .design import design_objects
     from .evidence import prepare_objects

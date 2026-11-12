@@ -20,7 +20,7 @@ flowchart TD
     GEO --> PV[现有独立物理验证路径]
 ```
 
-`construction/asset_agents.py` 继续提供旧导入名 `run_artisan`、`child_environment`，其实现来自 `construction/artisan_backend.py`。`harness/geometry.py` 直接依赖后端，不再为了执行 SDK 而导入模型适配器。
+`construction/artisan_backend.py` 直接提供 `run_artisan`、`child_environment`。`harness/geometry.py` 直接依赖后端，不再为了执行 SDK 而导入模型适配器。
 
 ## 后端操作与兼容性
 
@@ -90,23 +90,7 @@ qa = run_artisan(python, bundle, mode="qa")
 
 ## 验证与限制
 
-运行命令（不安装依赖）：
-
-```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q \
-  tests/test_artisan_backend.py tests/test_assembly_build_gate.py \
-  tests/test_asset_agents.py tests/test_harness_assembly.py \
-  tests/test_harness_geometry.py tests/test_harness_physics.py \
-  tests/test_harness_run.py tests/test_standard_interactions.py tests/test_components.py
-```
-
-关闭自动插件加载是因为当前 shell 会加载 ROS 的 pytest 插件，该插件缺少 `lark`，会在收集测试前中断；本轮未安装或修改 ROS 环境。
-
-本轮实际结果：上述 9 个测试文件共 **122 passed**；本轮涉及的源文件和测试文件均通过 Ruff 检查。
-
-后端测试使用真实子进程和实际 worker，配合本地替代 SDK，检验状态协议、产物存在性、输入变化、旧结果冒用、QA 反馈、超时等行为。装配构建测试执行真实解析式审核，仅替代最后的资产构建器；包含成功路径和孔径错误、轴线不支持、缺少连接计划、过期报告等对照。失败路由测试检验分类是否从物理结果传到现有修复策略。
-
-本轮没有调用模型、重新生成电脑或自行车、运行真实 Artisan SDK 资产编译导出或进行 GPU / Isaac 功能实验。已有电脑/自行车相关几何约定的单元测试属于回归检查，不代表真实场景重新验证。
+历史开发验证见[清理前记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/ARTISAN_BACKEND.md)。当前分支已删除开发测试，保留后端状态协议与资产审核。Mac 上的代码检查不能证明实际 Artisan 导出或 Isaac 功能验证通过。
 
 输入绑定目前覆盖约定的工作目录文件，不是任意 Python 依赖发现器；未锁定整个 Artisan 安装树、第三方包版本或运行环境。导出文件哈希保证列入清单的文件未变化，不证明所有格式引用都有效、碰撞质量合格或仿真可执行。SDK 内部仍可能在导出时重新加载或编译模型，API 分开不等于 SDK 已彻底解耦。
 
@@ -114,7 +98,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q \
 
 2026-11-09 更新：已开始统一前端描述，P0 实际实现和限制见
 [ASSEMBLY_BLUEPRINT.md](ASSEMBLY_BLUEPRINT.md)，运行记录见
-[P0 报告](../reports/ASSEMBLY_BLUEPRINT_P0_20261109.md)。下文保留本次后端拆分完成时的建议；
+[P0 报告](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/reports/ASSEMBLY_BLUEPRINT_P0_20261109.md)。下文保留本次后端拆分完成时的建议；
 目前新增的描述层仍未替代全部 GeometryRecipe / AssemblyPlan 或机械功能验证。
 
 下一任务应从确定的装配描述输入开始，新增最小 IR 和现有 Blueprint / GeometryRecipe / AssemblyPlan 的适配器，明确零件定义与实例、单位与局部坐标系、接口及 Mate 引用、证据与假设。先用轴孔或螺栓台架做离线往返与错误引用测试，再连接实际后端；避免先增加 Agent 或直接扩展端到端视频流程。

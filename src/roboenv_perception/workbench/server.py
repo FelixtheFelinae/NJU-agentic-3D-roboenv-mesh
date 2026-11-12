@@ -274,13 +274,6 @@ def create_app(settings, token):
                     )
                 } if view.get("workflow") else None,
                 "revision_feedback": "blueprint/geometry params.feedback accepts up to 16 concrete findings, each <=4000 chars. Keep the original user requirement in task; pass compiler/reviewer findings as data. Read agent_observation for actual object IDs, reviews, failure tails and output_sources. Missing runtime lists are path preflight only.",
-                "reference_workflow": {
-                    "available": bool(settings.reference_case_root),
-                    "case": "laptop-desktop-20261023",
-                    "video_only": "reference_fit params.evidence_policy=video_only; raw cameras + video pixel corners, no catalog/old metric coordinates. Width=1 relative geometry only, absolute dimensions unobservable. reference_code asset-0002 then reference_validate stage=appearance/qa/geometry/render then reference_review asset-0002. No metric physics or scene review in video-only branch.",
-                    "scope": "Same original desktop video only. Reuses labelled historical manual corners, camera/mask evidence and model-family confirmation; creates NEW models and NEW physical evidence. Not generic automatic reconstruction.",
-                    "sequence": "reference_fit(perception) -> reference_code(reference, asset_id=asset-0001/2/3, one call each) -> reference_validate(reference, stage=appearance/geometry/qa/simulation/reload/hinge_primary/hinge_followup) -> reference_review(reference, asset_id=asset-0001/2/3 then scene). Always use latest reference source. Read latest status/error, not just process completion.",
-                },
                 "parameters": {
                     "perception_edit": "frame_id (required for video); merge: instance IDs; exclude: instance IDs; labels: {instance_id: {category, task_role, physical_role, visual_route, rationale}}. A merge unions real masks; never invent masks.",
                     "segment": "optional candidates: full Inventory.objects array with cNNN IDs/category/prompt/bbox_xyxy_norm; reruns actual SAM",

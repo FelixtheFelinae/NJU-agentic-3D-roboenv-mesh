@@ -31,7 +31,7 @@ class Evidence(Contract):
 
 class Parameter(Contract):
     quantity: Quantity = Field(default_factory=Quantity)
-    unit: Literal["m", "rad", "kg", "N*m", "rad/s", "m/s", "dimensionless"]
+    unit: Literal["m", "rad", "kg", "N", "N*m", "rad/s", "m/s", "dimensionless"]
     confidence: float | None = Field(default=None, ge=0, le=1)
     interval: tuple[float, float] | None = None
 
@@ -61,6 +61,7 @@ class LocalFrame(Contract):
 class PartDefinition(Contract):
     id: str
     category: str
+    spec_ref: str | None = None
     geometry: str
     hollow: bool = False
     dimensions_m: Dimensions = Field(default_factory=Dimensions)
@@ -122,6 +123,7 @@ class Interface(Contract):
 
 class Mate(Contract):
     id: str
+    rule_ref: str | None = None
     type: Literal[
         "fixed",
         "revolute",
@@ -237,7 +239,7 @@ class AssemblyBlueprint(Contract):
                 parent=p.parent,
                 role=definitions[p.definition_id].category,
                 **definitions[p.definition_id].model_dump(
-                    exclude={"id", "category", "mass_kg", "visual_mesh_ref", "collision_mesh_ref"}
+                    exclude={"id", "category", "spec_ref", "mass_kg", "visual_mesh_ref", "collision_mesh_ref"}
                 ),
             )
             for p in self.part_instances

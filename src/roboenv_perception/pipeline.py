@@ -64,7 +64,7 @@ def stage_segment(segmenter, image, inventory, config, stage_dir):
     )
     for index, item in enumerate(raw):
         save_mask(stage_dir / "raw_masks" / f"r{index + 1:04d}.png", item.mask)
-    # Validate first; even replay masks must have original-frame geometry.
+    # Validate masks against the original-frame geometry.
     detections, uncertain, issues = clean_detections(
         raw, image.size, config.processing, config.sam.confidence_threshold
     )
@@ -214,18 +214,15 @@ def run_image(
             }
             write_json(output / "inputs/frame.json", frame)
         with stage("backend_setup"):
-            if config.sam.backend != "replay" or config.vlm.backend != "replay":
-                from .runtime import cuda_info
+            from .runtime import cuda_info
 
-                run["cuda"] = cuda_info()
+            run["cuda"] = cuda_info()
             # Check SAM before incurring an external VLM call.
             segmenter = segmenter if segmenter is not None else make_segmenter(config.sam)
             vlm = vlm if vlm is not None else make_vlm(config.vlm)
         with stage("inventory"):
             inventory = stage_inventory(vlm, frame_path, task, output / "stages/inventory")
-            run["model_execution"]["vlm"] = (
-                "replayed" if config.vlm.backend == "replay" else "executed"
-            )
+            run["model_execution"]["vlm"] = "executed"
         with stage("segment"):
             segment_dir = output / "stages/segment"
             detections, uncertain, issues, rows = stage_segment(
@@ -233,7 +230,7 @@ def run_image(
             )
             run["model_execution"][
                 "grounded_sam2" if config.sam.backend == "grounded_sam2" else "sam3"
-            ] = "replayed" if config.sam.backend == "replay" else "executed"
+            ] = "executed"
         with stage("labels"):
             labels, label_warnings = stage_labels(
                 vlm, frame_path, detections, rows, segment_dir, task, output / "stages/labels"
@@ -323,9 +320,6 @@ def run_image(
                 issues.append(
                     {"code": "unknown_pixels", "severity": "review", "pixels": unknown_pixels}
                 )
-            replayed = config.vlm.backend == "replay" or config.sam.backend == "replay"
-            if replayed:
-                issues.append({"code": "replayed_model_outputs", "severity": "review"})
             status = (
                 "fail"
                 if any(i["severity"] == "fail" for i in issues)
@@ -334,9 +328,7 @@ def run_image(
             quality = {
                 "schema_version": SCHEMA_VERSION,
                 "checks_status": status,
-                "validation_level": "fixture_or_recording_replay"
-                if replayed
-                else "model_outputs_unverified",
+                "validation_level": "model_outputs_unverified",
                 "ground_truth_metrics": {
                     "status": "not_evaluated",
                     "recall": None,
@@ -413,7 +405,7 @@ def run_image(
         run.update(
             status="completed",
             checks_status=status,
-            execution_mode="replay" if replayed else "live",
+            execution_mode="live",
             prompt_version=PROMPT_VERSION,
             python_version=platform.python_version(),
             dependencies={

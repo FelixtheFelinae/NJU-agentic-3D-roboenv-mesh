@@ -71,7 +71,6 @@ def load_construction_config(path: Path) -> ConstructionConfig:
     with path.open("rb") as handle:
         config = ConstructionConfig.model_validate(tomllib.load(handle))
     for obj, key in [
-        (config.vlm, "replay_dir"),
         (config.design, "measurements"),
         (config.background, "gaussian_repo"),
     ]:

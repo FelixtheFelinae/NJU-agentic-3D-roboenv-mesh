@@ -31,11 +31,8 @@ def load_config(path: Path) -> PipelineConfig:
     with path.open("rb") as handle:
         config = PipelineConfig.model_validate(tomllib.load(handle))
     for obj, name in [
-        (config.vlm, "replay_dir"),
-        (config.sam, "replay_manifest"),
         (config.sam, "checkpoint"),
         (config.sam, "grounding_model_path"),
-        (config.video, "replay_manifest"),
     ]:
         value = getattr(obj, name)
         if value and not Path(value).is_absolute():

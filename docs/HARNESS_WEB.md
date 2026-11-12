@@ -36,6 +36,6 @@ assessments = assess_claims(result, claims)
 
 默认 `dns_resolver="system"`。若宿主把公开域名解析为 `198.18.0.0/15` 等非公网地址，仍会拒绝连接。可以明确设置 `WebSearchPolicy(dns_resolver="google")`：通过固定公网地址 `8.8.8.8` 访问 `https://dns.google/resolve`，TLS 验证 `dns.google`，分别查询 A/AAAA，拒绝非公网地址、失败或截断响应。随后连接已检查的目标公网 IP，继续验证目标域名的 TLS 证书。该选项只向 Google 公共 DNS 发送域名，不向其发送搜索词、图像或本地文件；不支持自定义解析器地址、系统代理或关闭证书验证。每次解析最多两个 64 KB DNS 响应，每次请求使用策略超时。
 
-离线验证：`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest -q tests/test_harness_web.py tests/test_harness_research.py`，2026-10-27 实测 26 项通过。覆盖非公网 DNS、固定连接、正文引用、来源冲突、型号名称不能充当图像匹配、无法匹配的来源不成为 candidate 等。
+历史开发验证见[清理前记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/HARNESS_WEB.md)。当前分支保留联网证据运行时校验，已移除自动化测试。
 
 2026-10-27 真实公网验证：宿主系统将 `html.duckduckgo.com` 解析为 `198.18.0.74`，默认路径正确拒绝；Google DoH 返回公网地址。设置 `provider="wikipedia", dns_resolver="google", max_results=2, max_pages=1`，检索 `Shimano Deore XT bicycle` 得到 `status="ok"`，抓取 `https://en.wikipedia.org/wiki/Shimano_Deore_XT` 的 7297 字正文，SHA-256 为 `60c9dd283fc90f57ab695b8965cd5fb0231182933fd708663f0305cdb3f036dd`。实际研究记录保存在 `outputs/harness_web_public_probe_20261027/`。这是搜索/抓取连通性验证，未执行真实图像适用性核对，不能据此声称该来源支持当前场景设计。相同 DNS 配置下 DuckDuckGo 返回 HTTP 202，模块保留 `error`，没有将挑战页面作为检索成功。

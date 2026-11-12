@@ -82,7 +82,7 @@ class Jobs:
                 if source_runs or object_id:
                     raise ValueError("工作流在内部绑定产物，请通过决策参数选择证据和对象")
                 if operation == "workflow_start":
-                    params = Options.model_validate(params or {}).model_dump()
+                    params = Options.model_validate(params or {}).model_dump(exclude_none=True)
                 else:
                     if inputs or not parent_id:
                         raise ValueError("恢复流程须提供初始工作流 ID，不重新上传输入")
@@ -105,7 +105,10 @@ class Jobs:
             if missing:
                 raise ValueError("生成环境未配置：" + ", ".join(missing))
             media = self.store.input_files(task_id, inputs) if inputs else []
-            if (not operation or operation in {"ingest", "perceive", "workflow_start"}) and not media:
+            declared = operation == "workflow_start" and (params or {}).get("declared_design") is not None
+            if declared and media:
+                raise ValueError("已知规格场景与媒体输入应分别提交")
+            if (not operation or operation in {"ingest", "perceive", "workflow_start"}) and not media and not declared:
                 raise ValueError("请选择已上传的输入")
             sources, lineage = {}, {}
             if operation:

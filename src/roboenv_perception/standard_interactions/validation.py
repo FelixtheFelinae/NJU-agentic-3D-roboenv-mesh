@@ -76,7 +76,6 @@ def run_validation(bundle, output, *, cases=("preflight",), timeout_s=7200, repo
         )
         write_json(output / "validation.json", report)
         return report
-    repo = Path(repo) if repo else Path(__file__).resolve().parents[3]
     inputs = output / "inputs"
     inputs.mkdir()
     import shutil
@@ -92,7 +91,7 @@ def run_validation(bundle, output, *, cases=("preflight",), timeout_s=7200, repo
     bench = inputs / "bench"
     bench.mkdir()
     for name in ("validate_tool.py", "assembly_protocol.py", "evaluate_assembly.py"):
-        shutil.copy2(repo / "experiments/triangular_box" / name, bench / name)
+        shutil.copy2(Path(__file__).with_name("bench") / name, bench / name)
     # Frozen base evaluator stays unchanged; observer evidence is supplemental.
     evaluator_record = next(
         r

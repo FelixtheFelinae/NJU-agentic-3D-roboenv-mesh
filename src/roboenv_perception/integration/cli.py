@@ -33,11 +33,11 @@ def main(argv=None) -> int:
         from .dsh_model import main as check_dsh_model
 
         return check_dsh_model(argv[1:])
-    if argv and argv[0] in {"clawspine", "smoke"}:
+    if argv and argv[0] == "clawspine":
         # Give the native launcher direct signal/lifecycle ownership, including
         # Ctrl-C cleanup, instead of leaving an extra Python parent waiting.
         try:
-            script = "smoke.mjs" if argv[0] == "smoke" else "clawspine.mjs"
+            script = "clawspine.mjs"
             os.execvpe("node", ["node", str(Path(__file__).with_name(script)), *argv[1:]],
                        {**os.environ, "ENVCREATOR_PYTHON": sys.executable})
         except OSError as exc:
@@ -51,7 +51,6 @@ def main(argv=None) -> int:
     commands.add_parser("background", help="Run optional local background outpainting on existing evidence")
     commands.add_parser("dsh-model", help="Check independent local DSH gateway settings without printing secrets")
     commands.add_parser("clawspine", help="Load a bundle using ClawSpine's native G1 entry")
-    commands.add_parser("smoke", help="Submit one public goal to an existing native robot session")
     tool = commands.add_parser("tool", help="Build a reference-informed robot tool using EnvCreator geometry")
     tool.add_argument("kind", choices=["electric-screwdriver"])
     tool.add_argument("--output", type=Path, required=True)

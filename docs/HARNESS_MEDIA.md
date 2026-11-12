@@ -41,9 +41,6 @@ SAM3 或配置的 Grounding DINO + SAM2.1 负责可见 mask。多图片输入逐
 
 离线检查：
 
-```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q tests/test_harness_media.py
-```
+[历史检查记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/docs/HARNESS_MEDIA.md)
 
-测试使用 replay 夹具，只验证文件契约、保守关联与来源校验，不代表真实 VLM、SAM3 或
-跨视角识别准确率。
+历史检查仅验证文件契约、保守关联与来源校验。当前分支已移除合成回放后端；真实 VLM、SAM 与跨视角识别质量仍需实际运行核实。

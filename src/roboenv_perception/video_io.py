@@ -109,12 +109,12 @@ def decode_video(source: Path, root: Path, config: VideoConfig):
     return info
 
 
-def encode_preview(paths: list[Path], destination: Path, fps: int, fixture: bool):
+def encode_preview(paths: list[Path], destination: Path, fps: int):
     from PIL import Image
 
     av = require_av()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    codec = "mpeg4" if fixture else "h264_nvenc"
+    codec = "h264_nvenc"
     with Image.open(paths[0]) as first:
         width, height = first.size
     # yuv420p requires even dimensions. Padding is preview-only, never mask coordinates.

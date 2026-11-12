@@ -336,7 +336,7 @@ def assemble_scene(assets: list[SceneAsset], output: Path, support: SupportSpec,
         if usd_python:
             import subprocess
 
-            from ..construction.asset_agents import child_environment
+            from ..construction.artisan_backend import child_environment
 
             bootstrap = ("import sys;sys.path.insert(0,sys.argv[1]);"
                          "from roboenv_perception.standard_interactions.placement import main;"

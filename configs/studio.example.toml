@@ -13,9 +13,12 @@ debug_component_tools = false
 physics = true
 web_search = true
 background_mode = "auto"
-# Fill these before using envcreator_generate:
+# Media workflow needs both perception and construction configs.
 # perception_config = "configs/local-grounded-sam2.toml"
 # construction_config = "configs/local-user-construction.toml"
+# Direct Isaac asset generation and USD handoff use an interpreter with pxr.
+# usd_python = "/path/to/openusd/python"
+# Legacy SDK route and pinned v9 assembly only.
 # artisan_python = "/path/to/Artisan/python"
 # blender = "/path/to/blender"
 # isaac_python = "/path/to/isaac/python.sh"

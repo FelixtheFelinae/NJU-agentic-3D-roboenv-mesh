@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from PIL import Image
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..artifacts.registry import content_digest, tree_index, verify_tree
 from ..components.catalog import requirements
@@ -39,6 +39,17 @@ class Options(BaseModel):
     model_config = ConfigDict(extra="forbid")
     background: Literal["off", "masks", "reconstruct"] = "off"
     physics: bool = False
+    declared_design: dict | None = None
+
+    @model_validator(mode="after")
+    def validate_declared_design(self):
+        if self.declared_design is not None:
+            from .declared_scene import DESIGN
+
+            if self.background != "off" or self.physics:
+                raise ValueError("declared design builds an unverified scene without media or physics jobs")
+            self.declared_design = DESIGN.validate_python(self.declared_design).model_dump(mode="json")
+        return self
 
 
 class Decision(BaseModel):
@@ -80,7 +91,8 @@ class Workflow:
     def __init__(self, root, settings, task, inputs, options, *, execute=None):
         self.root = root.resolve()
         self.settings, self.task, self.inputs = settings, task, list(inputs)
-        self.options = Options.model_validate(options).model_dump()
+        self.options = Options.model_validate(options).model_dump(exclude_none=True)
+        self.declared = self.options.get("declared_design")
         self.video = len(inputs) == 1 and Path(inputs[0]["name"]).suffix.lower() in VIDEO
         self.execute = execute
         self.state_path = self.root / "workflow.json"
@@ -92,7 +104,9 @@ class Workflow:
         atomic_json(self.state_path, self.state)
 
     def load(self):
-        if not self.inputs:
+        if self.declared is not None and self.inputs:
+            raise ValueError("已知规格场景与图片或视频输入应分别提交")
+        if not self.inputs and self.declared is None:
             raise ValueError("需要上传一段视频或一组图片")
         if not self.video and any(Path(row["name"]).suffix.lower() in VIDEO for row in self.inputs):
             raise ValueError("视频不能与其他输入混合")
@@ -101,9 +115,12 @@ class Workflow:
         for row in self.inputs:
             if sha256(Path(row["path"])) != row["sha256"]:
                 raise ValueError("原始输入哈希变化，请创建新任务")
+        settings = self.settings.model_dump(mode="json")
+        if settings.get("usd_python") is None:
+            settings.pop("usd_python", None)
         signature = stable_digest({
             "task": self.task, "inputs": self.inputs, "options": self.options,
-            "settings": self.settings.model_dump(mode="json"), "configs": config_identity(self.settings),
+            "settings": settings, "configs": config_identity(self.settings),
         })
         if self.state_path.is_file():
             self.state = read_json(self.state_path)
@@ -172,7 +189,8 @@ class Workflow:
             return old
         if time.monotonic() >= self.deadline:
             raise TimeoutError("工作流达到本次执行时限，可从已保存阶段继续")
-        internal = {"video_overview", "evidence_fusion", "build_hypothesis", "build_hypothesis_audit", "structure_audit"}
+        internal = {"video_overview", "evidence_fusion", "build_hypothesis", "build_hypothesis_audit",
+                    "structure_audit", "declared_scene"}
         missing = [] if operation in internal else requirements(operation, self.settings)
         if missing:
             raise ValueError(f'{operation} 缺少运行配置：{", ".join(missing)}')
@@ -183,6 +201,17 @@ class Workflow:
         if operation == "video_overview":
             evidence.overview(Path(self.inputs[0]["path"]), output)
             exports, status = {"video_overview": "overview.json"}, "observed"
+        elif operation == "declared_scene":
+            from .declared_scene import build_declared
+
+            if not self.settings.usd_python or not self.settings.usd_python.is_file():
+                raise ValueError("已知规格场景需要独立的 usd_python 配置")
+            build_declared(params, self.task, output, blender=self.settings.blender,
+                           usd_python=self.settings.usd_python,
+                           timeout_seconds=min(self.settings.max_wall_seconds, 900))
+            exports = {"built": "built", "blueprint": "built/blueprint.json",
+                       "rules": "assembly_rules.json", "delivery": "bundle"}
+            status = "unverified"
         elif operation in internal:
             from ..components.sources import source_path
 
@@ -435,6 +464,11 @@ class Workflow:
 
     def advance(self):
         s = self.state
+        if self.declared is not None:
+            if s["phase"] == "initial":
+                built = self.stage("declared_scene", params=self.declared)
+                self.phase("completed", built=built, blueprint=built, final_stages=[built], reason=None)
+            return
         if s["phase"] == "initial":
             if self.video:
                 self.phase("sampling", video_overview=self.stage("video_overview"))
@@ -539,6 +573,11 @@ class Workflow:
             self.phase("recovery", reason="连接树或功能面要求尚不能构建；请根据原始画面修订结构，禁止进入几何作者")
             return
         try:
+            from ..construction.part_rules import compile_mates
+
+            blueprint = parse_blueprint(read_json(self.ref(bp, "blueprint")))
+            if hasattr(blueprint, "mates"):
+                compile_mates(blueprint)
             self.preflight_build()
         except ValueError as exc:
             s["critic"].append(critic.finding(
@@ -610,20 +649,23 @@ class Workflow:
     def finish(self):
         s = self.state
         finals = []
-        if self.options["physics"]:
-            sources = {"assets": (s["visual"], "assets")}
+        sources = {"assets": (s["visual"], "assets")}
+        scene = physical = None
+        if self.options["physics"] or self.settings.usd_python:
             scene = self.stage("scene", {**sources, "evidence": (s["evidence"], "evidence")})
             if scene["status"] == "blocked":
                 self.record(scene, "scene", self.candidate(built=s["built"]), "scene_result.json")
-                self.phase("physical_recovery", reason="场景无法装配，未执行物理验证")
+                self.phase("physical_recovery", reason="场景无法装配，未生成交付包")
                 return
+            finals.append(scene)
+        if self.options["physics"]:
             physical = self.stage("physics", {**sources, "scene": (scene, "scene")})
             self.record(physical, "physics", self.candidate(built=s["built"]), "physics.json")
             s["physics_status"] = physical["status"]
             if physical["status"] != "physics_passed":
                 self.phase("physical_recovery", reason="物理协议未通过；外观通过不代表可用")
                 return
-            finals += [scene, physical]
+            finals.append(physical)
         if self.options["background"] != "off":
             background = self.stage("background", {"perception": (s["perception"], "perception")})
             finals.append(background)
@@ -632,6 +674,11 @@ class Workflow:
                 gaussian = self.stage("gaussian", {"cameras": (cameras, "cameras")})
                 overview = self.stage("overview", {"gaussian": (gaussian, "gaussian"), "cameras": (cameras, "cameras")})
                 finals += [cameras, gaussian, overview]
+        if scene and self.settings.usd_python:
+            inputs = {**sources, "scene": (scene, "scene")}
+            if physical:
+                inputs["physics"] = (physical, "physics")
+            finals.append(self.stage("export", inputs))
         self.phase("completed", final_stages=finals, reason=None)
 
     def summary(self, output):
@@ -714,20 +761,33 @@ class Workflow:
             "blueprint": bp, "critic": s["critic"][-8:], "history": history, "rounds": s["rounds"][-4:],
             "blueprint_identity": blueprint_identity, "construction_hypothesis": construction,
             "construction_readiness": analyze_readiness(parse_blueprint(
-                read_json(self.ref(self.active_blueprint(), "blueprint")))) if bp else None,
+                read_json(self.ref(self.active_blueprint(), "blueprint")))) if bp and self.declared is None else None,
             "backend_requirements": hypothesis.requirements(parse_blueprint(
-                read_json(self.ref(self.active_blueprint(), "blueprint")))) if bp else [],
+                read_json(self.ref(self.active_blueprint(), "blueprint")))) if bp and self.declared is None else [],
             "previews": previews, "physics_status": s["physics_status"],
-            "deliverables": self.candidate(assets=s["visual"], built=s["built"]) if s["phase"] == "completed" else {},
+            "deliverables": {},
             "limits": [
+                "已知规格场景采用声明尺寸，接触和脱扣尚待 Isaac 验证。",
+            ] if self.declared is not None else [
                 "单个目标；2D 视频预览不是视角覆盖度或尺寸测量。",
                 "候选渲染只用于诊断。视觉通过不构成网格、接触或真实物理验证。",
             ],
         }
         if s["phase"] == "completed":
+            result["deliverables"].update(self.candidate(built=s["built"]))
+            if s.get("visual"):
+                result["deliverables"].update(self.candidate(assets=s["visual"]))
             result["deliverables"].update(self.candidate(**{r["operation"]: r for r in s["final_stages"]}))
             if s.get("build_blueprint"):
                 result["deliverables"].update(self.candidate(build_hypothesis=s["build_blueprint"]))
+            if self.declared is not None:
+                bundle = self.ref(s["built"], "delivery")
+                rules = self.ref(s["built"], "rules")
+                result["deliverables"].update(
+                    bundle={"ref": str(bundle.relative_to(self.root)),
+                            "manifest_sha256": sha256(bundle / "manifest.json")},
+                    assembly_rules={"ref": str(rules.relative_to(self.root)), "sha256": sha256(rules)},
+                )
         return result
 
     def run(self, output, decision=None, *, actor=None):

@@ -1,1 +1,0 @@
-"""Reproducible white table experiments."""

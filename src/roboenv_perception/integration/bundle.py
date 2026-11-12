@@ -81,6 +81,13 @@ def inspect_bundle(bundle: Path) -> dict:
         raise ValueError("scene ID differs from delivery")
     if manifest.get("source_delivery_sha256") != files[delivery_path]:
         raise ValueError("delivery provenance hash mismatch")
+    rules = manifest.get("assembly_rules")
+    if rules is not None and (rules != "metadata/assembly_rules.json" or rules not in files):
+        raise ValueError("assembly rules must be an inventoried bundle member")
+    if delivery.get("assembly_rules") is not None and (
+        rules is None or delivery.get("assembly_rules_sha256") != files[rules]
+    ):
+        raise ValueError("bundle does not contain the declared assembly rules")
     return {
         "schema": SCHEMA,
         "bundle": str(root),
@@ -90,17 +97,25 @@ def inspect_bundle(bundle: Path) -> dict:
         "delivery_status": status,
         "file_count": len(files),
         "usd_check": manifest.get("usd_check"),
+        **({"assembly_rules": str(root / rules)} if rules else {}),
         "robot_execution": "not_run",
     }
 
 
-def export_bundle(delivery_path: Path, output: Path, usd_python: Path) -> dict:
+def export_bundle(delivery_path: Path, output: Path, usd_python: Path, *,
+                  assembly_rules: Path | None = None) -> dict:
     """Resolve USD dependencies in a separate worker, then publish a checked bundle."""
     delivery_path = delivery_path.resolve(strict=True)
     source_bytes = delivery_path.read_bytes()
     delivery = json.loads(source_bytes)
     if not isinstance(delivery, dict) or delivery.get("status") not in {"verified", "unverified"}:
         raise ValueError("unsupported delivery status")
+    declared_rules = delivery.get("assembly_rules")
+    if declared_rules is not None:
+        if declared_rules != "assembly_rules.json":
+            raise ValueError("declared assembly rules must be beside delivery.json")
+        if assembly_rules is None:
+            assembly_rules = _member(delivery_path.parent, declared_rules)
     value = delivery.get("scene_usd")
     if not isinstance(value, str) or not value:
         raise ValueError("delivery has no scene_usd; complete scene generation first")
@@ -128,6 +143,12 @@ def export_bundle(delivery_path: Path, output: Path, usd_python: Path) -> dict:
         check = json.loads(completed.stdout)
         (staging / "metadata").mkdir()
         (staging / "metadata/delivery.json").write_bytes(source_bytes)
+        if assembly_rules is not None:
+            payload = assembly_rules.read_bytes()
+            rule_doc = json.loads(payload)
+            if not isinstance(rule_doc, dict) or rule_doc.get("schema") != "envcreator.assembly-rules/1":
+                raise ValueError("unsupported assembly rules document")
+            (staging / "metadata/assembly_rules.json").write_bytes(payload)
         manifest = {
             "schema": SCHEMA,
             "scene": {"path": "scene/" + check["root_layer"], "id": delivery.get("scene_id"),
@@ -138,6 +159,8 @@ def export_bundle(delivery_path: Path, output: Path, usd_python: Path) -> dict:
             "files_sha256": {p.relative_to(staging).as_posix(): digest(p)
                              for p in sorted(staging.rglob("*")) if p.is_file()},
         }
+        if assembly_rules is not None:
+            manifest["assembly_rules"] = "metadata/assembly_rules.json"
         (staging / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
         inspect_bundle(staging)
         if output.exists():

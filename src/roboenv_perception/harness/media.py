@@ -151,11 +151,7 @@ def run_images(
             scene_id=scene_id,
             run_id=run_id,
             task_context=task or "not_provided",
-            execution_mode=(
-                "replay"
-                if config.vlm.backend == "replay" or config.sam.backend == "replay"
-                else "live"
-            ),
+            execution_mode="live",
         )
         safe_config = config.model_dump(mode="json")
         safe_config["vlm"]["headers"] = {key: "<redacted>" for key in config.vlm.headers}

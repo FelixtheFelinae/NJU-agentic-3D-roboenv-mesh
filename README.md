@@ -1,112 +1,81 @@
-# EnvCreator
+# EnvCreator Agent Harness
 
-EnvCreator 是当前视觉重建与交互资产生成框架的暂定名称，仓库名及 Python 模块名保持兼容。
-ClawSpine 的原生机器人能力通过独立适配层接入，见 [接入方式与实际验证](docs/ENVCREATOR_CLAWSPINE.md)。
-当前各入口、模型边界和已接通范围见 [仓库工作流树状图](docs/WORKFLOW_OVERVIEW.md)。
-可选的本地背景扩图入口为 `envcreator background`，沿用现有素材与 mask，生成外观图片；安装、固定相机加载及范围见 [本地背景扩图](docs/LOCAL_BACKGROUND.md)。
-可视化入口为 `envcreator studio`：复用原生 DSH 自然语言会话，浏览输入、产物、调用时间线与 CPU/GPU/进程监控，见 [Studio 安装与使用](docs/ENVCREATOR_STUDIO.md)。
+从图片、离线视频或明确的零件规格构建 Isaac Sim 场景，为 RoboHelix 等下游系统提供带来源记录的交互资产和 USD 场景包。
 
-NJU-SOARLAB 的 Real2Sim 实验：从图像或离线视频提取物体与背景，构建近似外形、碰撞和关节，再在 Isaac 中检查受力响应。
+当前代码基于 2026-11-11 的 `43d3c72`，保留 Agent Harness、内部组件、Studio、资产物理验证和交付适配。
+当前工作区已移除开发测试、合成演示、单场景实验及其兼容入口。原代码可由该提交恢复。
 
-## 从哪里开始
+## 图片与视频重建
 
-| 你要做什么 | 入口 | 说明 |
-| --- | --- | --- |
-| 自动构建与复审 | `scene-harness` | 感知 → 证据 → 任务范围 → 蓝图 → Blender / Artisan → 视觉复审 → 场景 → Isaac → 交付；实验性 |
-| 只做感知或分阶段构建 | `scene-perception` | 图像／视频分割、对象证据、蓝图、背景纹理、COLMAP、3DGS、独立标注评估 |
-| 复现已有物体实验 | `roboenv_perception.experiments` | 木桌、白桌、自行车、固定基座 G1 的专用实现，与通用 Harness 分开 |
+```mermaid
+flowchart TD
+    A[图片或视频与构建需求] --> B[DSH Agent 选择采样与目标]
+    B --> C[VLM 识别目标 · SAM 分离前景和背景]
+    C --> D[前景证据 → AssemblyBlueprint]
+    D --> E[结构审核 → GeometryRecipe → 几何关系检查]
+    E --> F[Blender 分件建模 → OpenUSD 写入资产]
+    F --> G[外观复审 → 场景组装与交付]
+    G --> H[USD 场景包 → RoboHelix 等下游]
+    E -. 问题反馈 .-> J[Critic 汇总 · Agent 修订]
+    G -. 问题反馈 .-> J
+    J -. 修订蓝图或回访原始视角 .-> D
+    C --> K[可选背景遮罩 → COLMAP 相机位姿 → 3DGS 背景]
+```
 
-[文档索引](docs/README.md) · [代码结构与调用关系](docs/ARCHITECTURE.md) · [已有实验](docs/EXPERIMENTS.md) · [历史记录](docs/history/README.md)
+Studio 的 DSH Agent 负责采样、目标选择和修订决策。CLI 使用同一套 Workflow。图中交付路径需配置 `usd_python`。默认处理一个前景目标，物理验证与背景重建按需启用。3DGS 背景目前单独输出。旧 `generate` / `scene-harness` 提供多对象批处理。
 
-## 运行 Harness
+## 已知规格生成
 
-正式推理和物理实验在 **Linux + NVIDIA** 主机执行。项目环境、SAM 权重、VLM 服务、Artisan、Blender、Isaac 分别按配置准备；源码仓库不附带这些运行时。
+```mermaid
+flowchart TD
+    A[规格 JSON 或 Studio 提交的设计参数] --> B[AssemblyBlueprint 定义零件和连接接口]
+    B --> C[配合规则检查连接两端]
+    C --> D[GeometryRecipe → Blender 分件网格与碰撞体]
+    D --> E[OpenUSD 写入刚体、关节及连接规则]
+    C --> E
+    E --> F[场景包 · scene.usda 与 assembly_rules.json]
+    F -. 后续加载与验收 .-> G[Isaac Sim / Isaac Lab]
+```
+
+![螺钉盖板的分件、配合与脱扣规则示意](docs/images/screw-cover-concept.svg)
+
+*螺钉盖板设计示意。盖板孔按螺杆外径留间隙，底座内螺纹由导程约束表示，螺钉在 USD 中保留独立刚体。尺寸和脱扣行为待 Isaac 验收。*
+
+`envcreator workflow start --design` 接收 M3、M4、M5 不同杆长的螺钉盖板，或指定开角的限位铰链。已知规格入口由 Blender 建模、OpenUSD 写出候选包。螺纹预紧、起拧和续拧阻力、脱扣由 Isaac 步前钩子处理。接入方式和输入示例见 [Isaac USD 工作流](docs/ISAAC_USD_WORKFLOW.md)。
+
+## 使用入口
 
 ```bash
-# 在已准备好的项目环境中安装／更新命令行入口
-.venv/bin/python -m pip install --no-deps -e .
-.venv/bin/scene-harness --help
-
-.venv/bin/scene-harness \
-  --task '重建桌上的杯子，验证水平推碰' \
-  --video /absolute/path/clip.mp4 \
-  --perception-config /absolute/path/perception.toml \
-  --construction-config /absolute/path/construction.toml \
-  --artisan-python /absolute/path/artisan-python \
-  --blender /absolute/path/blender \
-  --isaac-python /absolute/path/isaac-python \
-  --output /absolute/path/new-run
+python -m pip install --no-deps -e .
+envcreator --help
+envcreator workflow start --help
+envcreator studio --help
+scene-perception --help
 ```
 
-图片输入将 `--video` 换为 `--images image1.jpg image2.jpg`。入口也可用 `.venv/bin/python -m roboenv_perception.harness.cli`。
-配置可从 `configs/api.example.toml`、`configs/grounded-sam2.example.toml` 和 `configs/construction.example.toml` 开始；实际地址、模型、权重及工具路径由本地配置指定。详见 [Harness 用法](docs/AGENTIC_HARNESS.md)、[API](docs/API.md)和[主机准备](docs/HOST_SETUP.md)。
+- `envcreator workflow start / advance` 执行固定流程、提交决策或恢复。
+- `envcreator studio` 提供原生 DSH 会话、证据、候选、调用记录和资源状态。
+- `envcreator generate` 执行已有多对象构建 Harness。
+- `scene-perception` 提供感知、证据、背景和独立构建阶段。
+- `envcreator handoff / inspect` 打包并核对 USD 依赖。
+- `envcreator tool / tool-test` 保留电动螺丝刀生成与运行时功能验证。
 
-`envcreator generate` 复用同一生成入口；`envcreator handoff` 打包 USD 场景，
-`envcreator clawspine` 调用外部 ClawSpine 的原生 G1 启动器。当前先复用机器人运行能力，
-RoboHelix 的进化调度暂不接入。
-`envcreator tool electric-screwdriver` 复用 Blender/Artisan 生成直柄电动螺丝刀，
-收集官方参考并保留建模假设，带抓持/TCP 坐标和独立主轴速度驱动；传入 `--isaac-python` 后执行功能验证。
-`envcreator tool-test` 可验证已有工具：理想导轨对准、六角啮合、旋松及偏心/倾斜/间隙/错规格/停机对照。
-已有工具通过理想台架的 32 项检查，旋转约 5 圈、退出约 4.10 mm；G1 抓取与对准场景已打包，机器人实验尚未运行。
-后续 Agent 工具流程沿用原生 DSH：`envcreator dsh-tool-profile` 生成插件配置，通过 ClawSpine 既有的
-`--native-extra-patch` 加载；资料、生成、验证和交付工具均保存调用前后记录，不另建模型循环。
-生成命令、物理实验和修复记录见 [电动螺丝刀试制](experiments/electric_screwdriver/README.md)。
-通用 worker 已在真实 Isaac 中验证刚体推碰、被动铰链和理想固定比传动；
-完整图片重建的交付仍逐次接受视觉与物理审查，失败或证据不足保留 `unverified`。
-当前视觉复审已出现误判；`verified` 表示程序门禁通过，仍需结合实际渲染和实验范围判断。
+模型推理、Blender 建模、OpenUSD 导出和 Isaac 物理验证需要准备各自的运行环境。旧工具及冻结 v9 台架仍使用 Artisan。Linux/NVIDIA 执行路径见 [环境配置](docs/HOST_SETUP.md)。Mac 可用于代码维护与入口、构建检查。
 
-输出根目录的 `state.json` 保存阶段状态，`delivery/delivery.json` 汇总资产、场景、物理检查和任务覆盖；候选、原始响应、失败与哈希一并保留。相同输入和源码可恢复已有阶段；源码或输入变化后需要新输出目录。
+## 代码组织
 
-### 当前边界
+| 位置 | 职责 |
+| --- | --- |
+| `harness/` | Workflow、批处理构建、场景组装和验证调度 |
+| `components/` | 供 Workflow、原生工具和 Studio 共享的组件操作 |
+| `construction/` | 证据、装配蓝图、结构修订、Blender/Artisan 与背景重建 |
+| `standard_interactions/`、`tools/` | 已声明的交互机制、工具资产及运行时物理验证 |
+| `artifacts/`、`execution/` | 产物索引、哈希、调用记录和运行环境适配 |
+| `integration/` | 场景依赖包、DSH 配置与 ClawSpine 接口 |
+| `workbench/`、`integrations/studio/` | 服务、作业、原生插件与前端 |
 
-- 几何通过类型化配方生成，能表达的形状受接口约束；视觉审查已有误拒和误放行记录，自动修复尚不稳定。
-- 尺度、摆位及物理参数可含估计或假设。图像框到支撑面的布局映射不等于相机标定。
-- 通用物理协议覆盖水平刚体推碰、被动铰链、旋转轴及理想固定比传动。抓取、拿起、骑行、机器人任务需要另外验证。
-- `verified` 表示该次程序门禁通过。3DGS 外观、文件检查、外力实验和机器人任务分别保留自己的证据范围。
-- 多张独立图片的身份融合仍可能不确定；ClawSpine 已接通原生启动与插件接口，RoboHelix 进化调度和最终机器人 Benchmark 尚未接入完成。
+[流程与调用关系](docs/WORKFLOW_OVERVIEW.md) · [架构](docs/ARCHITECTURE.md) · [清理记录](docs/HARNESS_CLEANUP.md) · [文档索引](docs/README.md)
 
-具体成功、失败和审查反例见 [Harness 运行记录](docs/history/HARNESS_RUNS_20261027.md)。
+仿真资产、原始媒体、权重、密钥和运行结果保存在 Git 之外。资产物理检查覆盖报告所列行为，机器人任务成功由下游评测记录。
 
-## 分阶段使用
-
-```bash
-.venv/bin/scene-perception --help
-.venv/bin/scene-perception run-video \
-  --video test_media/videos/scene.mp4 \
-  --config configs/local.toml \
-  --scene-id desk-video --output outputs/desk-video-NEW
-```
-
-`--task` 为感知／设计提供用途描述，不直接启动机器人。`demo`、`demo-video` 和 `demo-construction` 使用合成或回放数据，供接口检查。分割后端与 CUDA 准备见 [第一步](docs/STEP1.md)、[视频与评估](docs/STEP23.md)、[替代分割后端](docs/GROUNDED_SAM2.md)；对象设计、背景与训练命令见 [构建说明](docs/CONSTRUCTION.md)。
-
-## 代码与产物的位置
-
-```text
-src/roboenv_perception/
-  *.py             图像／视频感知、数据契约、评估
-  construction/    共享证据、蓝图、建模后端、纹理与背景训练
-  harness/         通用构建控制器、几何配方、场景与物理协议
-  experiments/     wood_table / white_table / bicycle / g1 专用实验
-scripts/           环境准备、公共工具、Blender 建模程序、旧命令转接
-configs/           不含凭据的配置模板
-schemas/           感知与评估 JSON 契约
-tests/            代码与接口回归测试
-docs/             当前方法和用法；history/ 保存历史运行与规划
-```
-
-原图、视频、模型权重、凭据和 `outputs/` 默认不提交。文档中的 `outputs/...` 是运行主机上的工件路径；clone 仓库不会取得这些 USD、纹理、报告或视频，也不会自动获得历史实验结果。复制场景必须保留其资产和纹理依赖。
-
-旧 `scripts/build_*.py` 等命令及 `construction/isaac_*` 专用 worker 路径保留兼容转接；新代码使用 `experiments` 下的实现。两种资产作者路径的区别见 [代码结构](docs/ARCHITECTURE.md)。
-
-## 开发检查
-
-```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q
-.venv/bin/ruff check src tests scripts
-```
-
-真实 Blender 测试需 `BLENDER_BIN` 或 PATH 中的 Blender，其他模型／仿真运行仍需各自环境。单元测试通过不代表真实重建或机器人任务通过。
-
-## 许可证
-
-一手代码采用 [GPL-3.0-only](LICENSE)。第三方软件、权重、数据、机器人资产和仿真器保留各自许可。
+第一方源码采用 [GPL-3.0-only](LICENSE)。第三方软件、数据与模型沿用各自许可。

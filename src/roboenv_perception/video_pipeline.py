@@ -37,8 +37,6 @@ def run_video(
     if not source.is_file():
         raise ValueError("input video does not exist")
     output.mkdir(parents=True, exist_ok=False)
-    fixture = config.sam.backend == "replay" and config.vlm.backend == "replay"
-    replayed = config.sam.backend == "replay" or config.vlm.backend == "replay"
     run_id = "run-" + uuid.uuid4().hex[:12]
     run = {
         "schema_version": SCHEMA_VERSION,
@@ -48,7 +46,7 @@ def run_video(
         "status": "running",
         "stages": [],
         "started_at": datetime.now(timezone.utc).isoformat(),
-        "execution_mode": "replay" if replayed else "live",
+        "execution_mode": "live",
         "segmentation_backend": config.sam.backend,
         "model_execution": {
             "vlm": "not_run",
@@ -79,8 +77,7 @@ def run_video(
 
     try:
         with stage("environment"):
-            if not fixture:
-                run["cuda"] = cuda_info()
+            run["cuda"] = cuda_info()
             backend = backend or make_video_backend(config)
             vlm = vlm or make_vlm(config.vlm)
         with stage("decode"):
@@ -92,14 +89,12 @@ def run_video(
             reference_path = output / frames[reference_index]["image_ref"]
         with stage("inventory"):
             inventory = stage_inventory(vlm, reference_path, task, output / "stages/inventory")
-            run["model_execution"]["vlm"] = (
-                "replayed" if config.vlm.backend == "replay" else "executed"
-            )
+            run["model_execution"]["vlm"] = "executed"
         with stage("tracking"):
             manifest = backend.track(output, frames, inventory, reference_index)
             run["model_execution"][
                 "grounded_sam2" if config.sam.backend == "grounded_sam2" else "sam3"
-            ] = "replayed" if config.sam.backend == "replay" else "executed"
+            ] = "executed"
         with stage("reference_labels"):
 
             class ReferenceSegmenter:
@@ -310,7 +305,6 @@ def run_video(
                     [output / f["preview_ref"] for f in frame_records],
                     output / "previews/tracking.mp4",
                     config.video.preview_fps,
-                    fixture,
                 )
             except Exception as error:
                 preview_info = {
@@ -327,7 +321,7 @@ def run_video(
                 if (output / "previews/tracking.mp4").exists():
                     (output / "previews/tracking.mp4").unlink()
             write_json(output / "previews/encoding.json", preview_info)
-        status = "review" if replayed or all_issues else "pass"
+        status = "review" if all_issues else "pass"
         quality = {
             "schema_version": SCHEMA_VERSION,
             "checks_status": status,
@@ -353,7 +347,7 @@ def run_video(
             },
         )
         (output / "report.md").write_text(
-            f"# 离线视频感知报告\n\n处理帧：{len(frames)}；轨迹：{len(registry.tracks)}；检查：{status}。\n\n执行模式：{'含回放输出，模型执行情况见 run.json' if replayed else 'CUDA 模型流程'}。\n\n原始 PTS 和采样映射在 inputs/video.json；未处理帧没有生成 mask。\n\n本报告不证明真实分割准确率或三维重建成功。\n",
+            f"# 离线视频感知报告\n\n处理帧：{len(frames)}；轨迹：{len(registry.tracks)}；检查：{status}。\n\n执行模式：CUDA 模型流程。\n\n原始 PTS 和采样映射在 inputs/video.json；未处理帧没有生成 mask。\n\n本报告不证明真实分割准确率或三维重建成功。\n",
             encoding="utf-8",
         )
         run.update(status="completed", checks_status=status)

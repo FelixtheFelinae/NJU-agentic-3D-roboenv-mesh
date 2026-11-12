@@ -178,7 +178,7 @@ Workflow 的结构作者因此最多按真实 Schema 错误纠正一次；保留
 它不提供通用 CAD、闭环机构求解、自动隐藏接口恢复或新的接触协议。
 
 具体代码边界、笔记本/自行车实测、失败与回归结果见
-[P0-3 记录](../reports/FIXED_WORKFLOW_P03_20261111.md)。
+[P0-3 记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/reports/FIXED_WORKFLOW_P03_20261111.md)。
 
 ## P0-4：明确平面、轴线与边缘
 
@@ -225,7 +225,7 @@ needs_revision，交给已有 Critic/修订路径，不作为来源错误提前�
 外观/运动学近似与接触级构建的分流仍待实现，未决铰链接触配合仍会阻塞当前构建。
 
 代码路径、真实笔记本/自行车输出及回归结果见
-[P0-4 记录](../reports/FIXED_WORKFLOW_P04_20261111.md)。
+[P0-4 记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/reports/FIXED_WORKFLOW_P04_20261111.md)。
 
 ## P0-5：按约束 ID 局部修订
 
@@ -269,4 +269,4 @@ params.constraint_ids 和可选 feedback。默认 Agent 工具面仍只有 Workf
 阶段缓存纳入 constraint-repair 版本；当前版本 `/2`。
 
 这只修复具体关系的表达/绑定，不是几何生成成功或机械正确的证明。
-真实案例、失败记录及测试见 [P0-5 记录](../reports/FIXED_WORKFLOW_P05_20261111.md)。
+真实案例、失败记录及测试见 [P0-5 记录](https://github.com/FelixtheFelinae/NJU-agentic-3D-roboenv-mesh/blob/43d3c72b3f7699e32eb297816828a5ed9874a232/reports/FIXED_WORKFLOW_P05_20261111.md)。

@@ -1,4 +1,4 @@
-"""Optional headless Blender mesh backend; the Artisan SDK retains physics ownership."""
+"""Headless Blender mesh generation shared by the USD and legacy build paths."""
 
 import hashlib
 import json

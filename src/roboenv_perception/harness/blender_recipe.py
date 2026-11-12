@@ -13,6 +13,31 @@ parameters = globals()["parameters"]
 export_mesh = globals()["export_mesh"]
 
 
+def annulus_colliders(solid, transform):
+    # A whole-ring convex hull fills the bore. Each sector is independently convex.
+    count = 24
+    step = math.tau / count
+    inner = solid["inner_radius_m"] / math.cos(step / 2)
+    outer = solid["radius_m"]
+    if inner >= outer:
+        raise ValueError(f'{solid["name"]}: wall too thin for the collision sector approximation')
+    half = solid["length_m"] / 2
+    for index in range(count):
+        lo, hi = index * step, (index + 1) * step
+        corners = [(outer, lo), (outer, hi), (inner, hi), (inner, lo)]
+        vertices = [transform @ Vector((r * math.cos(a), r * math.sin(a), z))
+                    for z in (-half, half) for r, a in corners]
+        name = f'{solid["name"]}_sector_{index:02d}'
+        mesh = bpy.data.meshes.new(name)
+        mesh.from_pydata(vertices, [], [(3, 2, 1, 0), (4, 5, 6, 7),
+                                         *[(i, (i + 1) % 4, (i + 1) % 4 + 4, i + 4)
+                                           for i in range(4)]])
+        mesh.update()
+        obj = bpy.data.objects.new(name, mesh)
+        bpy.context.collection.objects.link(obj)
+        export_mesh(name, obj, part=solid["part"], collision_for=solid["name"])
+
+
 for solid in parameters["solids"]:
     shape = solid["shape"]
     name = solid["name"]
@@ -157,6 +182,10 @@ for solid in parameters["solids"]:
         obj.location = solid["center_m"]
         obj.rotation_mode = "XYZ"
         obj.rotation_euler = solid["rotation_rpy"]
+    bpy.context.view_layer.update()
+    transform = obj.matrix_world.copy()
     export_mesh(name, obj, rgba=tuple(solid["rgba"]), part=solid["part"],
                 material_class=solid.get("material_class", "matte_plastic"),
                 preview_translation=parameters["preview_offsets"][solid["part"]])
+    if shape == "annulus" and parameters.get("explicit_collision"):
+        annulus_colliders(solid, transform)

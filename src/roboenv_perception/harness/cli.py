@@ -18,7 +18,8 @@ def main(argv=None) -> int:
                         help="JSON mapping object_id to AssemblyPlan; corrections are audited and hashed")
     parser.add_argument("--perception-config", type=Path, required=True)
     parser.add_argument("--construction-config", type=Path, required=True)
-    parser.add_argument("--artisan-python", type=Path, required=True)
+    parser.add_argument("--usd-python", type=Path, help="OpenUSD interpreter for direct Isaac USD generation")
+    parser.add_argument("--artisan-python", type=Path, help="Legacy or frozen v9 build interpreter")
     parser.add_argument("--blender", type=Path)
     parser.add_argument("--isaac-python", type=Path)
     parser.add_argument("--standard-component-root", type=Path,
@@ -52,6 +53,7 @@ def main(argv=None) -> int:
     settings = HarnessSettings(perception_config=args.perception_config,
                                construction_config=args.construction_config,
                                artisan_python=args.artisan_python,
+                               usd_python=args.usd_python,
                                blender=args.blender, isaac_python=args.isaac_python,
                                standard_component_root=args.standard_component_root,
                                assembly_validation=args.assembly_validation,

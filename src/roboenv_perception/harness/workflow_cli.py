@@ -21,6 +21,7 @@ def main(argv=None):
     media = start.add_mutually_exclusive_group(required=True)
     media.add_argument("--video", type=Path)
     media.add_argument("--images", type=Path, nargs="+")
+    media.add_argument("--design", type=Path, help="Known-parameter screw_cover or hinged_cover JSON")
     start.add_argument("--background", choices=["off", "masks", "reconstruct"], default="off")
     start.add_argument("--physics", action="store_true")
     advance = commands.add_parser("advance")
@@ -32,10 +33,11 @@ def main(argv=None):
         if args.action == "start":
             if not 3 <= len(args.task.strip()) <= 4000:
                 raise ValueError("任务描述需要 3 到 4000 字符")
-            files = [args.video] if args.video else args.images
+            files = [args.video] if args.video else (args.images or [])
             inputs = [{"name": p.name, "path": str(p.resolve()), "sha256": sha256(p)} for p in files]
             cfg = Settings.load(args.config)
-            options = Options(background=args.background, physics=args.physics).model_dump()
+            options = Options(background=args.background, physics=args.physics,
+                              declared_design=read_json(args.design) if args.design else None).model_dump(exclude_none=True)
             request = {"task": args.task, "settings": cfg.model_dump(mode="json"), "inputs": inputs,
                        "options": options}
             root.mkdir(parents=True, exist_ok=True, mode=0o700)

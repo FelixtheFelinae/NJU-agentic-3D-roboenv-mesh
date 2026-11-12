@@ -42,12 +42,12 @@ checkpoint、Grounding DINO 目录的相对路径均相对 TOML 所在目录解�
 
 ```bash
 .venv/bin/scene-perception --env-file .env.local run \
-  --image test_media/images/scene.jpg \
+  --image /absolute/input/scene.jpg \
   --config configs/local-grounded-sam2.toml \
   --output outputs/grounded-sam2-image-001
 
 .venv/bin/scene-perception --env-file .env.local run-video \
-  --video test_media/videos/scene.mp4 \
+  --video /absolute/input/scene.mp4 \
   --config configs/local-grounded-sam2.toml \
   --output outputs/grounded-sam2-video-001
 ```

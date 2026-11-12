@@ -29,8 +29,6 @@ def legacy_generate(root, spec):
         cfg["perception_config"],
         "--construction-config",
         cfg["construction_config"],
-        "--artisan-python",
-        cfg["artisan_python"],
         "--max-revisions",
         str(cfg["max_revisions"]),
         "--max-wall-seconds",
@@ -39,7 +37,7 @@ def legacy_generate(root, spec):
         cfg["background_mode"],
     ]
     argv += ["--video" if spec["video"] else "--images", *[row["path"] for row in spec["inputs"]]]
-    for key in ("blender", "isaac_python"):
+    for key in ("blender", "usd_python", "artisan_python", "isaac_python"):
         if cfg.get(key):
             argv += ["--" + key.replace("_", "-"), cfg[key]]
     if not cfg["physics"]:

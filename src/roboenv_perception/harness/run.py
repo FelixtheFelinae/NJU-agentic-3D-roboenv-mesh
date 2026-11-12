@@ -48,7 +48,8 @@ class HarnessRequest(Contract):
 class HarnessSettings(Contract):
     perception_config: Path
     construction_config: Path
-    artisan_python: Path
+    artisan_python: Path | None = None
+    usd_python: Path | None = None
     blender: Path | None = None
     isaac_python: Path | None = None
     standard_component_root: Path | None = None
@@ -70,6 +71,10 @@ class HarnessSettings(Contract):
     background_mode: Literal["off", "masks", "auto"] = "auto"
     background_generation_config: Path | None = None
 
+    @property
+    def usd_executable(self):
+        return self.usd_python or self.artisan_python
+
     @model_validator(mode="after")
     def generation_needs_background(self):
         if self.background_generation_config and self.background_mode == "off":
@@ -83,7 +88,8 @@ class HarnessFailure(RuntimeError):
 
 def _fingerprint(request: HarnessRequest, settings: HarnessSettings) -> dict:
     paths = [settings.perception_config, settings.construction_config,
-             settings.artisan_python, *(request.images or ([request.video] if request.video else []))]
+             *(request.images or ([request.video] if request.video else []))]
+    paths.extend(path for path in (settings.usd_python, settings.artisan_python) if path is not None)
     if settings.blender:
         paths.append(settings.blender)
     if request.assembly_overrides:
@@ -97,15 +103,9 @@ def _fingerprint(request: HarnessRequest, settings: HarnessSettings) -> dict:
         generation = load_background_generation_config(settings.background_generation_config)
         paths.extend(p for p in generation.model_path.rglob("*")
                      if p.is_file() and ".cache" not in p.relative_to(generation.model_path).parts)
-    perception = load_config(settings.perception_config)
     construction = load_construction_config(settings.construction_config)
-    for filename in (construction.design.measurements, perception.sam.replay_manifest,
-                     perception.video.replay_manifest):
-        if filename:
-            paths.append(Path(filename))
-    for config in (perception.vlm, construction.vlm):
-        if config.backend == "replay":
-            paths.extend(sorted(Path(config.replay_dir).glob("*.json")))
+    if construction.design.measurements:
+        paths.append(Path(construction.design.measurements))
     # Resuming under changed controller/worker code must not reuse old reviews.
     paths.extend(sorted(Path(__file__).resolve().parents[1].rglob("*.py")))
     paths.append(Path(__file__).resolve().parents[1] / "standard_interactions/catalog_v1.json")
@@ -276,6 +276,7 @@ def _build_assets(path: Path, designs: Path, evidence: Path, research: Path,
                                          candidate_hashes=candidate_hashes(blueprint, recipe))
                 built = build_recipe(blueprint, recipe, candidate_dir / "built",
                                      artisan_python=settings.artisan_python,
+                                     usd_python=settings.usd_python,
                                      blender=settings.blender,
                                      timeout_seconds=settings.build_timeout_seconds,
                                      **({"compiled_assembly": compiled,
@@ -289,7 +290,7 @@ def _build_assets(path: Path, designs: Path, evidence: Path, research: Path,
                     row.update(build_status="visual_review_passed", selected_revision=revision,
                                usd=built["usd"], usd_sha256=built["usd_sha256"],
                                recipe_ref=str((candidate_dir / "author/recipe.json").resolve()),
-                               model_ref=str((candidate_dir / "built/model.py").resolve()),
+                               model_ref=built["model_ref"],
                                preview_refs=built["visual_previews"], physics_status="not_run",
                                physics_notes=built.get("physics_notes", []))
                     row.update(assembly_status=assembly['status'],
@@ -715,10 +716,13 @@ def _package(path: Path, request: HarnessRequest, stages: dict[str, Path]):
 
 def run_harness(request: HarnessRequest, settings: HarnessSettings, output: Path) -> dict:
     """Run or resume a task. A stage completes only after its persisted output exists."""
+    if settings.usd_executable is None:
+        raise ValueError("configure usd_python or the legacy artisan_python")
     output = output.resolve()
     fingerprint = _fingerprint(request, settings)
     public_settings = {k: v for k, v in settings.model_dump(mode="json").items()
-                       if k not in {"perception_config", "construction_config"}}
+                       if k not in {"perception_config", "construction_config"}
+                       and (k != "usd_python" or v is not None)}
     if output.exists():
         state = read_json(output / "state.json")
         if (state["fingerprint"] != fingerprint

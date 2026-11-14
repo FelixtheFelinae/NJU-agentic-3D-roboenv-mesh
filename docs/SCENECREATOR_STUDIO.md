@@ -1,6 +1,6 @@
 # SceneCreator Studio
 
-Studio 复用 ClawSpine 使用的 DSH 原生会话、模型请求、插件、历史和取消机制。DSH Agent 通过 SceneCreator 插件调用 Workflow。内部 VLM 与 SAM 提供感知和结构证据，Blender 生成分件，OpenUSD 写入候选资产。COLMAP／3DGS 背景和 Isaac 物理验证按需执行。
+Studio 复用 ClawSpine 使用的 DSH 原生会话、模型请求、插件、历史和取消机制。DSH Agent 通过 SceneCreator 插件调用 Workflow。新原生调用默认由任务模型直接编写结构，允许以机械常识推断未见内部；内部 VLM 与 SAM 仍服务感知，内部模型仍生成几何配方和复审渲染。Blender 生成分件，OpenUSD 写入候选资产。COLMAP／3DGS 背景和 Isaac 物理验证按需执行。
 
 ## 已实现的入口与调用关系
 
@@ -26,6 +26,47 @@ scenecreator studio
 ```
 
 默认工具负责查询和推进 Workflow。DSH Agent 决定采样、目标与修订方向，程序调度组件和审核。`envcreator_generate` 保留完整旧 Harness，通过调试配置向 DSH 注册。工作流完成、外观审核和物理结果分别记录。
+
+## 原生结构作者与常识推断
+
+`envcreator_workflow_start` 为新调用默认设置 `params.structure_author="native_dsh"`。
+在本机独立 DSH 配置已注册该模型时，可用 Studio TOML 的 `model="gpt-6-astra"` 选择 Astra；
+这只影响下次启动的会话，不热切换已有会话，不转交 `VLM_API_KEY`。
+
+```text
+感知与原始对象画面 → select_target
+  → structure_proposal：返回对象观察包、完整 AssemblyBlueprint schema 和常识推断约定
+  → 原生 DSH/Astra 编写蓝图 → submit_structure(reason, blueprint, revision)
+  → 确定性来源／结构检查 → accept_structure 或 revise_structure 后重新提交
+  → 现有几何配方、几何审核、构建与按需物理检查
+```
+
+结构作者和结构接受阶段不另行调用内部 VLM。`harness/workflow_structure.py` 保存原生
+会话／调用身份、完整蓝图、来源标记和文件哈希。`accept_structure` 记录同一任务作者的接受，
+明确 `independent_model_review=false`，不能称为独立模型 QA。几何与物理检查保持原有执行范围。
+
+未见内部和未观察到运动不阻止生成候选：例如闭合抽屉可选择侧装滑轨、近似安装位置、滑动关节及
+假设行程，记录木质导向或底装滑轨等替代解释。不要求先取得内部照片、抽动视频或检索资料。
+`prior:` 来源仅记录模型使用的机械常识及理由；隐藏接口／配合用 `inferred/assumed`，
+猜测尺寸、质量和行程用 `assumed`，未观察运动时 `observed_motion=[]`。
+来源记录不意味着这些结构有直接图像证据，也不代表已确认真实产品采用此机构。
+
+原生模式可直接在完整蓝图内声明构建参数；修改用 `revise_structure → submit_structure`，
+保留已有测量与几何要求，不调用旧的内部 VLM 参数审核或局部修订。
+`params.structure_author="internal_vlm"` 可显式选择原有路径；旧工作流签名和恢复行为保持兼容。
+CLI 使用 `scenecreator workflow start ... --structure-author native_dsh` 开启同一路径，
+由调用者随后提交决策 JSON，不增加命令行模型聊天循环。
+
+能力限制：当前 schema 和 USD writer 能表达 prismatic 关节，但配合前检／解析几何审核尚不支持
+完整 prismatic 配合，因此“带假设滑轨的结构描述已接受”仍可能在构建前停止。没有绕过该检查，
+没有新增滑轨接触或功能验收协议。感知、几何作者和渲染复审仍存在内部 VLM 调用，尚未全量移除。
+原生模型图像输入和实际生成质量需通过真实会话另行实测；本次本地合成夹具只验证协议与状态流转。
+
+本次验证：`python -m unittest discover -s tests -v` 通过 9 项，
+`node --test tests/native_structure_tools.test.mjs` 通过 1 项；覆盖静态抽屉先验、来源反例、
+修订／接受、哈希绑定、旧流程选项兼容和插件默认作者。前端 `npm --prefix integrations/studio run build`
+成功，修改的 Python 文件 Ruff 检查通过。全仓 Ruff 仍有未修改文件中的 105 项既有问题。
+没有执行真实 Astra 图像请求、生成滑轨网格或运行物理试验。
 
 ## 使用
 

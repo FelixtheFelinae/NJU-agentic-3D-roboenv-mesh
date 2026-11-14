@@ -95,7 +95,7 @@ class Quantity(Contract):
         if (self.value is None) != (self.source == "unknown"):
             raise ValueError("null values require unknown source; numeric values need a source")
         if self.source != "unknown" and not self.evidence_refs:
-            raise ValueError("numeric values must reference observations or measurements")
+            raise ValueError("numeric values must reference observations, measurements or declared priors")
         return self
 
 

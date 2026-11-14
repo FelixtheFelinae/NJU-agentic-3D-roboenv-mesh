@@ -15,6 +15,7 @@ from ..construction.design import (
     infer_model,
     validate_blueprint_evidence,
 )
+from ..construction.structure_prior import prior_refs
 from ..execution.context import span
 from ..io import load_config, read_json, relative_file, sha256, write_json
 from ..vlm import make_vlm
@@ -419,6 +420,7 @@ def run(
                     "refs": sorted(
                         {v["ref_id"] for v in data["views"]}
                         | {c["source_id"] for c in claims if c.get("status") == "candidate"}
+                        | prior_refs(blueprint)
                     ),
                 },
             )
@@ -533,6 +535,7 @@ def geometry_operation(operation, paths, output, settings, task, object_id, conf
             for c in claims_for(paths, evidence["object_id"])
             if c.get("status") == "candidate"
         )
+    allowed.update(prior_refs(blueprint))
     if not allowed:
         raise ValueError("缺少几何证据目录；历史 recipe 需提供 evidence 来源")
     recipe.check_against(blueprint, allowed)
@@ -565,7 +568,7 @@ def geometry_operation(operation, paths, output, settings, task, object_id, conf
                 review.get("blueprint_sha256") != sha256(paths["blueprint"])
                 or review.get("decision") != "PASS"
             ):
-                raise ValueError("结构独立审核尚未通过或不对应当前版本")
+                raise ValueError("结构接受或审核记录未通过，或不对应当前版本")
         parts = recipe_parts(blueprint, recipe)
         if (recipe.assembly or ASSEMBLY_INTENT.search(task) or "assembly" in paths
                 or any(p["category"] == "fastener" for p in parts)):

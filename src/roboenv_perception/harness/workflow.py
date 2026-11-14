@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..artifacts.registry import content_digest, tree_index, verify_tree
 from ..components.catalog import requirements
-from ..construction.assembly_blueprint import parse_blueprint
+from ..construction.assembly_blueprint import AssemblyBlueprint, parse_blueprint
 from ..construction.assembly_readiness import VERSION as READINESS_VERSION
 from ..construction.assembly_readiness import analyze_readiness
 from ..execution.context import emit
@@ -23,12 +23,14 @@ from ..io import read_json, relative_file, sha256, write_json
 from . import workflow_critic as critic
 from . import workflow_evidence as evidence
 from . import workflow_hypothesis as hypothesis
+from . import workflow_structure as structure
 from .workflow_hypothesis import BuildHypothesis
 
 VIDEO = {".mp4", ".mov", ".mkv", ".webm"}
 ACTIONS = {
     "sampling": ["sample_video", "stop"],
     "target": ["select_target", "revisit_video", "stop"],
+    "structure_proposal": ["submit_structure", "revisit_video", "stop"],
     "structure": ["accept_structure", "propose_build", "repair_constraints", "revise_structure", "revisit_video", "stop"],
     "recovery": ["propose_build", "repair_constraints", "revise_structure", "revisit_video", "stop"],
     "physical_recovery": ["revisit_video", "stop"],
@@ -39,6 +41,7 @@ class Options(BaseModel):
     model_config = ConfigDict(extra="forbid")
     background: Literal["off", "masks", "reconstruct"] = "off"
     physics: bool = False
+    structure_author: Literal["internal_vlm", "native_dsh"] = "internal_vlm"
     declared_design: dict | None = None
 
     @model_validator(mode="after")
@@ -59,6 +62,7 @@ class Decision(BaseModel):
         "revise_structure", "revisit_video",
         "propose_build",
         "repair_constraints",
+        "submit_structure",
     ]
     revision: int | None = Field(default=None, ge=0)
     sampling: dict | None = None
@@ -67,6 +71,7 @@ class Decision(BaseModel):
     evidence_refs: list[str] | None = Field(default=None, min_length=1, max_length=16)
     hypothesis: BuildHypothesis | None = None
     constraint_ids: list[str] | None = Field(default=None, min_length=1, max_length=4)
+    blueprint: AssemblyBlueprint | None = None
 
 
 def atomic_json(path, value):
@@ -92,6 +97,10 @@ class Workflow:
         self.root = root.resolve()
         self.settings, self.task, self.inputs = settings, task, list(inputs)
         self.options = Options.model_validate(options).model_dump(exclude_none=True)
+        # Preserve signatures of existing internal-VLM workflows.
+        if self.options["structure_author"] == "internal_vlm":
+            self.options.pop("structure_author")
+        self.native_structure = self.options.get("structure_author") == "native_dsh"
         self.declared = self.options.get("declared_design")
         self.video = len(inputs) == 1 and Path(inputs[0]["name"]).suffix.lower() in VIDEO
         self.execute = execute
@@ -190,7 +199,7 @@ class Workflow:
         if time.monotonic() >= self.deadline:
             raise TimeoutError("工作流达到本次执行时限，可从已保存阶段继续")
         internal = {"video_overview", "evidence_fusion", "build_hypothesis", "build_hypothesis_audit",
-                    "structure_audit", "declared_scene"}
+                    "structure_audit", "declared_scene", "native_structure", "native_structure_accept"}
         missing = [] if operation in internal else requirements(operation, self.settings)
         if missing:
             raise ValueError(f'{operation} 缺少运行配置：{", ".join(missing)}')
@@ -220,6 +229,16 @@ class Workflow:
                 report = analyze_readiness(parse_blueprint(read_json(paths["blueprint"])))
                 write_json(output / "construction_readiness.json", report)
                 exports, status = {"construction_readiness": "construction_readiness.json"}, report["status"]
+            elif operation == "native_structure":
+                report = structure.materialize(
+                    paths["evidence"], object_id, params["blueprint"], output,
+                    reason=params["reason"], actor=params["actor"], previous=paths.get("previous"),
+                )
+                exports = {"blueprint": "blueprint.json", "selfcheck": "selfcheck.json"}
+                status = report["status"]
+            elif operation == "native_structure_accept":
+                structure.accept(paths["blueprint"], output, reason=params["reason"], actor=params["actor"])
+                exports, status = {"blueprint_review": "review.json"}, "review_passed"
             elif operation == "evidence_fusion":
                 origins = [
                     {**row, "evidence": paths[f"evidence_{i}"], "perception": paths[f"perception_{i}"]}
@@ -278,6 +297,10 @@ class Workflow:
 
     def actions(self):
         actions = ACTIONS.get(self.state["phase"], []).copy()
+        if self.native_structure:
+            # Native authors revise the full blueprint, including assumed build
+            # parameters, rather than calling an internal VLM for a repair/review.
+            actions = [v for v in actions if v not in {"propose_build", "repair_constraints"}]
         if not self.video:
             actions = [v for v in actions if v != "revisit_video"]
         if self.state["round"] >= self.settings.max_revisions:
@@ -328,6 +351,7 @@ class Workflow:
                     "select_target": {"object_id", "reason"}, "revise_structure": {"reason"},
                     "accept_structure": {"reason"}, "stop": {"reason"},
                     "repair_constraints": {"reason", "constraint_ids"},
+                    "submit_structure": {"reason", "blueprint"},
                     "propose_build": {"reason", "hypothesis"}}[action]
         optional = {"evidence_refs"} if action == "select_target" else set()
         if set(raw) - optional != required | {"action", "revision"} or any(
@@ -368,6 +392,18 @@ class Workflow:
 
             select_constraints(parse_blueprint(read_json(self.ref(s["blueprint"], "blueprint"))),
                                decision.constraint_ids)
+        if action == "submit_structure":
+            if not self.native_structure:
+                raise ValueError("直接提交结构仅适用于 native_dsh 结构作者")
+            if decision.blueprint.object_id != s["target"]["object_id"]:
+                raise ValueError("结构必须绑定当前选定的对象 ID")
+            # Reject invalid provenance before advancing durable history, so
+            # the caller can correct its submission at the same revision.
+            structure.validate(
+                self.ref(s["evidence"], "evidence"), s["target"]["object_id"],
+                decision.blueprint.model_dump(mode="json"),
+                previous=self.ref(s["previous"], "blueprint") if s.get("previous") else None,
+            )
         s["history"].append({
             "revision": s["revision"], "round": s["round"], "phase": s["phase"],
             **decision.model_dump(exclude_none=True), "actor": actor,
@@ -401,7 +437,17 @@ class Workflow:
             self.new_round("constraints", decision.reason)
             self.phase("design", previous=s["blueprint"], pending_constraint_ids=decision.constraint_ids)
         elif action == "accept_structure":
+            if self.native_structure:
+                s["blueprint_review"] = self.stage(
+                    "native_structure_accept", {"blueprint": (s["blueprint"], "blueprint")},
+                    params={"reason": decision.reason, "actor": actor},
+                )
             self.phase("construction")
+        elif action == "submit_structure":
+            self.phase("native_design", pending_structure={
+                "blueprint": decision.blueprint.model_dump(mode="json"),
+                "reason": decision.reason, "actor": actor,
+            })
         elif action == "propose_build":
             s["build_attempts"] += 1
             self.phase("hypothesis", pending_hypothesis=decision.hypothesis.model_dump(mode="json"),
@@ -500,6 +546,9 @@ class Workflow:
                            evidence=merged, objects=objects, target=objects[0],
                            observed_frames=sorted(set(s["observed_frames"]) |
                                                   {v["source_frame"] for v in objects[0]["views"]}))
+            if self.native_structure:
+                self.phase("structure_proposal", reason="由原生 DSH 作者提交结构；允许常识推断隐藏机构，无须内部画面或运动视频")
+                return
             target = s["target"]["object_id"]
             observed = {"evidence": (s["evidence"], "evidence")}
             dispositions = [
@@ -534,6 +583,18 @@ class Workflow:
             else:
                 self.record(bp, "blueprint", self.candidate(blueprint=bp), "selfcheck.json")
             self.phase("recovery", reason="结构检查未通过；需要修订假设、回访原视频或保留未决")
+        if s["phase"] == "native_design":
+            sources = {"evidence": (s["evidence"], "evidence")}
+            if s.get("previous"):
+                sources["previous"] = (s["previous"], "blueprint")
+            bp = self.stage("native_structure", sources, object_id=s["target"]["object_id"],
+                            params=s["pending_structure"])
+            s.update(blueprint=bp, blueprint_review=None, pending_structure=None)
+            self.record(bp, "selfcheck", self.candidate(blueprint=bp))
+            self.audit_structure(bp)
+            self.phase("recovery" if bp["status"] == "needs_revision" else "structure",
+                       reason="结构需要修订" if bp["status"] == "needs_revision" else None)
+            return
         if s["phase"] == "hypothesis":
             derivative = self.stage("build_hypothesis", {"blueprint": (s["blueprint"], "blueprint")},
                                     params={"hypothesis": s["pending_hypothesis"]})
@@ -700,7 +761,7 @@ class Workflow:
             evidence.contact_sheet(images, output / name)
             previews.append(name)
 
-        if s.get("video_overview") and s["phase"] in {"sampling", "recovery", "physical_recovery", "target", "structure"}:
+        if s.get("video_overview") and s["phase"] in {"sampling", "recovery", "physical_recovery", "target", "structure", "structure_proposal"}:
             name = "source-video.jpg"
             shutil.copyfile(self.ref(s["video_overview"], "video_overview").parent / "source-overview.jpg", output / name)
             previews.append(name)
@@ -729,7 +790,7 @@ class Workflow:
             blueprint_identity = {"sha256": sha256(path), "role": "canonical_description"}
             bp = {k: source.get(k) for k in ("kind", "coordinate_units", "target_dimensions_m")}
             bp.update({k: source.get(k, [])[:16] for k in (
-                "part_definitions", "part_instances", "interfaces", "joints", "mates", "geometric_constraints", "hypotheses", "unresolved",
+                "part_definitions", "part_instances", "interfaces", "joints", "mates", "geometric_constraints", "hypotheses", "unresolved", "evidence", "assumptions",
             )})
         construction = (
             read_json(self.ref(s["build_blueprint"], "build_hypothesis"))
@@ -750,6 +811,17 @@ class Workflow:
                     "parameter_count": len(row["hypothesis"]["parameters"]),
                 }
             history.append(item)
+        structure_request = None
+        if self.native_structure and s["phase"] == "structure_proposal":
+            from ..components.operations import observation
+
+            _, packet, _ = observation(self.ref(s["evidence"], "evidence"), s["target"]["object_id"])
+            structure_request = {
+                "author": "native_dsh", "instruction": structure.PRIOR_INSTRUCTION,
+                "schema": AssemblyBlueprint.model_json_schema(), "observation": packet,
+                "previous_blueprint": read_json(self.ref(s["previous"], "blueprint")) if s.get("previous") else None,
+                "internal_vlm_execution": "not_used_for_structure_authoring_or_acceptance",
+            }
         result = {
             "schema": s["schema"], "phase": s["phase"], "revision": s["revision"], "round": s["round"],
             "reason": s.get("reason"), "allowed_actions": self.actions(), "active_stage": s.get("active_stage"),
@@ -760,6 +832,9 @@ class Workflow:
             "sampling": s.get("sampling"), "objects": objects, "objects_total": len(s["objects"]),
             "blueprint": bp, "critic": s["critic"][-8:], "history": history, "rounds": s["rounds"][-4:],
             "blueprint_identity": blueprint_identity, "construction_hypothesis": construction,
+            "structure_request": structure_request,
+            "structure_author": "declared_design" if self.declared is not None else
+                                "native_dsh" if self.native_structure else "internal_vlm",
             "construction_readiness": analyze_readiness(parse_blueprint(
                 read_json(self.ref(self.active_blueprint(), "blueprint")))) if bp and self.declared is None else None,
             "backend_requirements": hypothesis.requirements(parse_blueprint(

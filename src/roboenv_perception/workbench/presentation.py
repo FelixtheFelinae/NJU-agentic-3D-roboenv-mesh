@@ -450,6 +450,7 @@ def workspace(store, task_id, identity=None, object_id=None):
         messages = {
             "sampling": "先查看原视频，选择能补充结构信息的画面",
             "target": "对象证据已准备，可确认本轮重建主体",
+            "structure_proposal": "可根据外观与常识生成结构，内部机构可采用明确的推断",
             "structure": "结构方案已完成，待确认假设与未知项",
             "recovery": "检查发现问题，需要修订结构或回看原视频",
             "physical_recovery": "物理检查未通过，已有结果和失败记录已保留",

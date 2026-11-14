@@ -125,7 +125,8 @@ function WorkflowView({data,tab,onAsk,busy}){
   return <section className="ec-workflow-review">
     <div className="ec-human-actions">
       {allowed.some(a=>["sample_video","select_target","accept_structure"].includes(a))&&<button disabled={busy} onClick={()=>ask("根据已附原始画面、证据和未决项，完成当前需要的判断并继续固定流程。")}>确认方向并继续</button>}
-      {allowed.includes("revise_structure")&&<button disabled={busy} onClick={()=>ask("结合当前审核指出的具体问题重新检查结构假设；不要为了编译而补造未知量。")}>重新检查结构</button>}
+      {allowed.includes("submit_structure")&&<button disabled={busy} onClick={()=>ask("根据物体外观和机械常识生成较可能的结构。允许没有直接内部画面或运动视频的机构推断，明确标记假设并保留替代解释。提交结构后继续检查。")}>生成可能的结构</button>}
+      {allowed.includes("revise_structure")&&<button disabled={busy} onClick={()=>ask("结合具体问题重新检查结构。可用明确标注的常识假设补充内部机构和构建参数，保留已有要求，不将推断写成观察或测量。")}>重新检查结构</button>}
       {allowed.includes("repair_constraints")&&<button disabled={busy} onClick={()=>ask("从具体审核问题中选择需要修正的几何约束 ID，使用 repair_constraints 局部修订；保留其他关系、零件、配合与未知参数，不能用改写全文或放宽要求绕过审核。")}>局部修正关系</button>}
       {allowed.includes("propose_build")&&<button disabled={busy} onClick={()=>ask("在不改写原始未知量的前提下，提出独立的候选构建假设。逐项说明试验尺度、关节参考约定与行程等假设的理由，不将它们当作视频测量；保留原有几何审核。")}>尝试带假设的候选</button>}
       {allowed.includes("revisit_video")&&<button disabled={busy} onClick={()=>ask("根据失败诊断寻找原视频中的新证据，说明需要什么画面，再选择采样时间段。新旧对象身份需要重新确认。")}>回看视频补充证据</button>}
@@ -134,7 +135,7 @@ function WorkflowView({data,tab,onAsk,busy}){
     </div>
     {(data.previews??[]).filter(p=>(kinds[tab]??[]).includes(p.name)).map(p=><figure className="ec-render-frame" key={p.name}><img src={link(p.artifact)} alt={names[p.name]??"实际结果"}/><figcaption>{names[p.name]}</figcaption></figure>)}
     {tab==="input"&&<p className="ec-view-note">原视频预览供选取时间段，不表示已经恢复相机视角或真实尺寸。</p>}
-    {tab==="structure"&&(data.blueprint?<div className="ec-human-card"><h3>当前结构</h3><p>{(data.blueprint.part_instances??[]).map(p=>p.name).join("、")}</p><p>{(data.blueprint.joints??[]).length} 个关节 · {(data.blueprint.mates??[]).length} 个配合关系</p>{(data.blueprint.unresolved??[]).map((text,i)=><p key={i}>{text}</p>)}<small>结构描述通过，不等于接口几何或物理功能通过。</small></div>:<p>选定对象后会生成结构方案。</p>)}
+    {tab==="structure"&&(data.blueprint?<div className="ec-human-card"><h3>当前结构</h3><p>{(data.blueprint.part_instances??[]).map(p=>p.name).join("、")}</p><p>{(data.blueprint.joints??[]).length} 个关节 · {(data.blueprint.mates??[]).length} 个配合关系</p>{(data.blueprint.assumptions??[]).map((text,i)=><p key={`assumed-${i}`}>建模假设：{text}</p>)}{(data.blueprint.hypotheses??[]).map((h,i)=><p key={`hypothesis-${i}`}>结构推断：{h.explanation}{h.alternatives?.length?`；其他可能：${h.alternatives.join("；")}`:""}</p>)}{(data.blueprint.unresolved??[]).map((text,i)=><p key={i}>{text}</p>)}<small>结构描述不代表接口几何或物理功能已通过验证。</small></div>:<p>选定对象后可根据外观和常识生成结构方案，未见内部可明确采用假设。</p>)}
     {tab==="structure"&&data.construction_readiness&&<div className="ec-human-card"><h3>建模前检查</h3><p>{data.construction_readiness.summary}</p>{data.construction_readiness.issues.slice(0,4).map((item,i)=><p key={i}>{item.message}</p>)}{data.construction_readiness.issues.length>4&&<small>还有 {data.construction_readiness.issues.length-4} 项问题，可结合检查记录重新检查结构。</small>}</div>}
     {tab==="structure"&&data.construction_hypothesis&&<div className="ec-human-card"><h3>候选构建假设</h3><p>以下数值用于试验，原始描述中的未知量仍保留。</p>{data.construction_hypothesis.plan.parameters.slice(0,8).map((p,i)=>{
       const parts=p.path.split("/"),last=parts.at(-1);

@@ -2,6 +2,7 @@
 dsh_root = "/path/to/ClawSpine"
 # Separate DSH gateway credentials; omit for asset browsing without model requests.
 # model_config_path = "configs/local-dsh-model.toml"
+# model = "gpt-6-astra" # Must be registered in that independent DSH configuration.
 state_root = "outputs/studio"
 import_root = "outputs"
 port = 8890

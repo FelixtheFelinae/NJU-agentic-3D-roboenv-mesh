@@ -24,6 +24,8 @@ def main(argv=None):
     media.add_argument("--design", type=Path, help="Known-parameter screw_cover or hinged_cover JSON")
     start.add_argument("--background", choices=["off", "masks", "reconstruct"], default="off")
     start.add_argument("--physics", action="store_true")
+    start.add_argument("--structure-author", choices=["native_dsh", "internal_vlm"], default="internal_vlm",
+                       help="native_dsh pauses for submit_structure; no internal structure model calls")
     advance = commands.add_parser("advance")
     advance.add_argument("--output", type=Path, required=True)
     advance.add_argument("--decision", type=Path, required=True, help="JSON decision with action and current revision")
@@ -37,6 +39,7 @@ def main(argv=None):
             inputs = [{"name": p.name, "path": str(p.resolve()), "sha256": sha256(p)} for p in files]
             cfg = Settings.load(args.config)
             options = Options(background=args.background, physics=args.physics,
+                              structure_author=args.structure_author,
                               declared_design=read_json(args.design) if args.design else None).model_dump(exclude_none=True)
             request = {"task": args.task, "settings": cfg.model_dump(mode="json"), "inputs": inputs,
                        "options": options}

@@ -79,21 +79,24 @@ export function registerTools(ctx, config) {
       { run_id: { type: "string" } },
     ],
     ["workflow_start",
-      "Start the fixed workflow with uploaded media or an explicit params.declared_design. For a declared screw cover or hinge, omit input_ids and leave physics and background off. It produces an unverified Isaac USD bundle. A video first asks for a sampling decision.",
+      "Start reconstruction with uploaded media. Structure author defaults to native_dsh: you author the full assembly with mechanical priors, submit_structure, then accept or revise it. No internal VLM authors or reviews that structure. Perception, geometry and visual review still use internal models. For an explicit params.declared_design screw cover or hinge, omit input_ids and leave physics and background off; it produces an unverified Isaac USD bundle. A video first asks for a sampling decision.",
       { task: { type: "string", minLength: 3, maxLength: 4000 },
         input_ids: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 32 },
         params: { type: "object", additionalProperties: false, properties: {
           background: { enum: ["off", "masks", "reconstruct"] }, physics: { type: "boolean" },
+          structure_author: { enum: ["native_dsh", "internal_vlm"] },
           declared_design: declaredDesign,
         } },
       }],
     ["workflow_advance",
-      "Advance the original workflow ID (parent_id). Read allowed_actions and revision. sample_video takes sampling; select_target takes the current object_id and reason justifying identity, plus optional evidence_refs tickets from retained_evidence and current objects[].views to choose at most 16 distinct real frames when fusing rounds. Include useful old and new observations. revisit_video takes sampling and reason. propose_build takes reason and hypothesis bound to blueprint_identity.sha256: an array of explicitly assumed parameters, never recovered measurements. Supported paths: /target_dimensions_m/x|y|z, /part_definitions/<id>/dimensions_m/x|y|z, /part_definitions/<id>/mass_kg, /joints/<name>/travel|rest. Units are m/kg/rad/convention. Do not overwrite known quantities, structural graph or relative units. repair_constraints takes reason and 1–4 existing constraint_ids from blueprint.geometric_constraints; it only rebinds those requirements and may add explicit plane/axis/edge interfaces, preserving all other fields. Use revise_structure for topology or intake changes. accept_structure/revise_structure/stop take reason. Candidate renders diagnose faults; they never enter real observation packets. resume takes only action.",
+      "Advance the original workflow ID (parent_id). Read allowed_actions and revision. In structure_proposal, submit_structure takes reason and a complete blueprint matching structure_request.schema and the selected object_id. You may generate plausible hidden rails/hinges, placement, dimensions and motion from mechanical common knowledge without internal images, retrieval or observed motion. Declare prior: references with origin=prior and rationale; mark those structures inferred/assumed and guessed numbers assumed, never observed/measured. This documents an assumption, not direct evidence. Then accept_structure records YOUR acceptance, not independent model QA. Use revise_structure and resubmit the full blueprint for changes, retaining original requirements. sample_video takes sampling; select_target takes the current object_id and identity reason, plus optional evidence_refs tickets when fusing at most 16 distinct old/new frames. revisit_video takes sampling and reason. Legacy internal_vlm only: propose_build takes reason and hypothesis bound to blueprint_identity.sha256; repair_constraints takes reason and 1–4 existing constraint_ids. accept_structure/revise_structure/stop take reason. Candidate renders diagnose faults; they never enter real observation packets. resume takes only action.",
       { parent_id: { type: "string" }, params: {
         type: "object", additionalProperties: false, required: ["action"], properties: {
-          action: { enum: ["sample_video", "select_target", "accept_structure", "revise_structure", "repair_constraints", "revisit_video", "propose_build", "stop", "resume"] },
+          action: { enum: ["sample_video", "select_target", "submit_structure", "accept_structure", "revise_structure", "repair_constraints", "revisit_video", "propose_build", "stop", "resume"] },
           revision: { type: "integer", minimum: 0 }, sampling, object_id: { type: "string" },
           reason: { type: "string", minLength: 1, maxLength: 1500 },
+          blueprint: { type: "object", additionalProperties: true,
+            description: "Complete AssemblyBlueprint; follow structure_request.schema returned by the workflow. Hidden mechanisms may rely solely on explicitly declared mechanical priors." },
           constraint_ids: { type: "array", minItems: 1, maxItems: 4, uniqueItems: true, items: { type: "string" } },
           evidence_refs: { type: "array", minItems: 1, maxItems: 16, uniqueItems: true, items: { type: "string" } },
           hypothesis: { type: "object", additionalProperties: false,
@@ -179,9 +182,12 @@ export function registerTools(ctx, config) {
         if (longOperation(operation))
           exec.signal?.addEventListener("abort", abort, { once: true });
         try {
+          const submitted = operation === "workflow_start"
+            ? { ...args, params: { structure_author: "native_dsh", ...args.params } }
+            : args;
           const value = await request(
             "/api/native/invoke",
-            { ...args, ...identity, operation },
+            { ...submitted, ...identity, operation },
             exec.signal,
           );
           if (!longOperation(operation)) return value;
@@ -253,8 +259,8 @@ export function apply(ctx, config) {
     name: "envcreator:studio",
     order: 130,
     text: () =>
-      "You are the native DSH task agent in SceneCreator Studio. Use context, then workflow_start for a new single-object reconstruction. SceneCreator runs perception, modeling and verification in a fixed order. You decide what evidence and structure to use. For video, read the timestamped original contact sheet: choose the window, sampling rate, frame budget and a reference frame with the target visible. Name the view or motion you need when requesting a revisit. At target selection, match the actual mask/context and justify whether the new track is the same object; never match by category alone. Review the structure, its evidence and unknowns before accepting or revising the proposed hypothesis. Follow allowed_actions and revision, using the original workflow_id for advancement. Treat candidate renders as diagnostic only. If no new observation can answer the question, stop with the remaining uncertainty. Background and physics run only if explicitly requested. Read the actual validation scope; workflow completion, visual acceptance and physical function are separate. On interruption, resume without changing the task. Summarize useful evidence and decisions in Chinese. SceneCreator VLM credentials are independent of your task model. No robot operation is registered." +
-      " On evidence revisit, retain useful original views: the workflow fuses raw observations after your explicit identity decision. If more than 16 distinct frames are available, use observation tickets to select the useful old/new views. For a separate build candidate you may use propose_build with explicitly assumed scale/limits; bind it to the canonical blueprint hash and actual view refs. Canonical unknowns stay unknown, relative units cannot become metres, and adopted assumptions must pass independent review, recipe conformance and the original geometry gates." +
+      "You are the native DSH task agent in SceneCreator Studio. Use context, then workflow_start for a new single-object reconstruction. Structure author defaults to native_dsh. In structure_proposal, use the supplied schema, original object images and mechanical common knowledge to author and submit the assembly yourself. Direct images of hidden internals, retrieval and motion video are not required: a closed drawer may have assumed side-mounted guides and a prismatic joint. Choose a likely functional candidate; record alternatives without building every one. Use prior: IDs with origin=prior and rationale, inferred/assumed relations, assumed numeric dimensions and placement. A prior is model knowledge, not recovered evidence. Keep observed_motion empty when motion was not observed. Lack of direct internal evidence alone must not stop generation or force a revisit. Preserve visible exterior facts and user requirements. Your acceptance is not independent QA. Perception, geometry and render review still use internal models. For video, choose sampling and reference frame from the original contact sheet. At target selection, match actual mask/context and justify identity, never category alone. Follow allowed_actions/revision and the original workflow_id. Treat renders as diagnostic, not new observations. Stop for unsupported requirements or remaining uncertainty that prevents the requested candidate, explaining the limit. Background and physics run only when requested; completion, visual acceptance and physical function are separate. On interruption, resume without changing the task. Summarize in Chinese. SceneCreator VLM credentials are independent. No robot operation is registered." +
+      " On evidence revisit, retain useful original views and explicitly decide identity before fusion. If more than 16 distinct frames are available, choose observation tickets. In native_dsh mode, provide explicit build assumptions in the submitted full blueprint; revise_structure resubmits it. Do not overwrite measurements or discard constraints. In legacy internal_vlm mode, propose_build creates a separate hash-bound parameter candidate with its existing review gates. Relative units cannot silently become metres. Geometry and physics checks apply in both modes." +
       " For a screw cover or hinge with explicit design parameters, submit workflow_start with params.declared_design. Preserve user-specified dimensions and mechanics. Report the USD bundle as a candidate pending Isaac validation." +
       (config.debugComponentTools ? " Debug and legacy component tools are available for explicit component experiments." : ""),
   });

@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from ..io import sha256, write_json
 from .assembly_blueprint import AssemblyBlueprint, digest
 from .contracts import DesignReview
+from .structure_prior import PRIOR_INSTRUCTION
 
 ASSEMBLY_INSTRUCTION = """Author the new AssemblyBlueprint only, replacing the legacy blueprint format.
 Embed the exact accepted asset_brief unchanged. Use part_definitions and part_instances;
@@ -33,7 +34,8 @@ features. Preserve them when evidence is insufficient, even if construction is b
 Describe functional interfaces with part-local frames; unknown origin/rotation must be null,
 not zero. Keep mates separate from kinematic joints and link each joint by mate_id.
 A revolute joint does not prove shaft-hole geometry, friction, or a real hinge implementation.
-Use hinge_region/contact_region for unresolved interfaces instead of invented hidden surfaces.
+Use hinge_region/contact_region when leaving an interface unresolved. Explicitly assumed
+hidden surfaces are also allowed for a plausible construction candidate; do not label them observed.
 Retain evidence records, hypotheses/alternatives, physics_intent and geometric_constraints.
 For rectangular base/panel approximations, state intrinsic planar faces and perpendicular
 adjacent edges as explicit assumed geometric constraints. These are requirements for the
@@ -51,7 +53,7 @@ States may describe configurations without numeric poses. Motion is observed onl
 actually records it. Do not require invisible internals for approximate exterior/hinge tasks.
 Selfcheck follows authoring; unknown dimensions or unresolved internal hardware are not by
 themselves blocking description defects. No simulation or CAD result has been obtained here.
-"""
+""" + "\n" + PRIOR_INSTRUCTION
 
 
 def author_assembly(vlm, context, images, output, *, schema_revisions=0):
@@ -77,7 +79,8 @@ def author_assembly(vlm, context, images, output, *, schema_revisions=0):
             context = {**context, "contract_feedback":
                        "Correct the actual schema error below. Keep the accepted intake, original "
                        "evidence, unknown quantities and mechanical requirements; do not fabricate "
-                       "hidden geometry or delete difficult constraints.\n" + str(error)[:8000]}
+                       "observed hidden geometry or delete difficult constraints. Explicit prior-based "
+                       "hidden structure is allowed.\n" + str(error)[:8000]}
 
 
 def check_assembly(blueprint, *, brief=None, allowed_refs=None, previous=None):

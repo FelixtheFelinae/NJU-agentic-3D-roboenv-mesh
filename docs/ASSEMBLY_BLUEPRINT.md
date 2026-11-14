@@ -2,6 +2,12 @@
 
 `envcreator.assembly-blueprint/1` 是当前装配描述格式。媒体重建和已知规格生成共用零件、接口、配合、状态及来源字段。后端支持范围由结构前检和配合规则检查决定。 [AssemblyBlueprint 源码](../src/roboenv_perception/construction/assembly_blueprint.py)
 
+原生 DSH 结构作者允许根据外观和机械常识生成未见内部，例如未抽动的闭合抽屉的侧装导向和滑动
+关节。无需直接内部影像、运动证据或检索来源；用 `origin=prior`、`prior:` ID 和理由记录推断依据，
+相应关系标记 `inferred/assumed`，猜测数字标记 `assumed`，不伪称观察或测量。
+替代解释可以保留而不全部构建。蓝图接受、几何可构建性及物理功能分别检查。
+原生提交与旧内部 VLM 路径的区别见 [Studio 原生结构作者](SCENECREATOR_STUDIO.md#原生结构作者与常识推断)。
+
 ## 实际入口与流程
 
 ```mermaid

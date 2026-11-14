@@ -18,6 +18,7 @@ from ..construction.assembly_blueprint import AssemblyBlueprint, legacy_projecti
 from ..construction.blender_backend import build_blender_meshes
 from ..construction.contracts import Blueprint
 from ..construction.design import infer_model
+from ..construction.structure_prior import prior_refs
 from ..contracts import Contract, VLMConfig
 from ..execution.context import traced
 from ..io import read_json, sha256, write_json
@@ -149,6 +150,8 @@ class GeometryRecipe(Contract):
     interface_bindings: list[InterfaceBinding] = Field(default_factory=list)
 
     def check_against(self, blueprint: Blueprint, allowed_refs: set[str]):
+        priors = prior_refs(blueprint)
+        allowed_refs = allowed_refs | priors
         if self.object_id != blueprint.object_id:
             raise ValueError("recipe object identity differs from blueprint")
         parts = {p.name for p in blueprint.parts}
@@ -189,6 +192,8 @@ class GeometryRecipe(Contract):
         for item in [*self.solids, *self.joint_placements]:
             if not set(item.evidence_refs) <= allowed_refs:
                 raise ValueError(f"unknown recipe evidence ref: {item.evidence_refs}")
+            if item.source in {"observed", "reference"} and set(item.evidence_refs) <= priors:
+                raise ValueError("prior-only geometry must be estimated/assumed, not observed/reference")
         if set(self.part_masses_kg) != parts:
             raise ValueError("each part needs a mass assumption")
         if any(not math.isfinite(v) or not 0 < v <= 1000 for v in self.part_masses_kg.values()):
@@ -298,11 +303,13 @@ def infer_recipe(config: VLMConfig, blueprint: Blueprint, evidence: dict, images
                  geometric_feedback: list[dict] | None = None,
                  schema_revisions: int = 0) -> GeometryRecipe:
     allowed = {v["ref_id"] for v in evidence["views"]}
+    allowed.update(prior_refs(blueprint))
     allowed.update(claim["source_id"] for claim in (external_claims or []) if claim.get("status") == "candidate")
     context = {
         "blueprint": blueprint.model_dump(mode="json"),
         "evidence": evidence,
         "allowed_refs": sorted(allowed),
+        "hidden_structure_policy": "Build declared inferred/assumed internals without requiring direct images or motion. Prior-only solids/placements must use source=assumed; preserve their rationale in notes. Do not claim recovered internals or verified function.",
         "external_claims": external_claims or [],
         "previous_issues": feedback or [],
         "geometric_feedback": geometric_feedback or [],
